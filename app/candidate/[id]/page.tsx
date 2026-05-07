@@ -10,9 +10,9 @@ import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { Nav } from '@/components/iphipi/nav';
 import { Footer } from '@/components/iphipi/footer';
-import { Button } from '@/components/ui/button';
 import { MatchScoreRing } from '@/components/iphipi/match-score-ring';
-import { ArrowRight, Check, Minus, Sparkles, FileCheck2 } from 'lucide-react';
+import { StartInterviewButton } from '@/components/iphipi/start-interview-button';
+import { Check, Minus, Sparkles, FileCheck2 } from 'lucide-react';
 import {
   getApplication,
   getJob,
@@ -105,11 +105,8 @@ export default async function CandidatePage({ params }: { params: Params }) {
             We'll prepare a personalized agenda based on your resume and this
             role. You'll need a webcam and microphone.
           </p>
-          <div className="mt-6">
-            {/* Interview workspace will be wired up in the next step. */}
-            <Button size="lg" className="gap-2" disabled title="Coming online next">
-              Start mock interview <ArrowRight className="h-4 w-4" />
-            </Button>
+          <div className="mt-6 flex justify-center">
+            <StartInterviewButton applicationId={application.id} />
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
             Browse other roles ranked for you on the{' '}
