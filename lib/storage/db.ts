@@ -32,14 +32,20 @@ import type {
   VisualMetrics,
 } from './types';
 
+import { existsSync, mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 let client: Client | null = null;
 function db(): Client {
   if (!client) {
-    const url = process.env.TURSO_DATABASE_URL;
+    let url = process.env.TURSO_DATABASE_URL;
+    // Local-dev fallback: if Turso isn't configured, use a local SQLite file.
+    // Production deploys (Vercel) MUST set TURSO_DATABASE_URL since the Vercel
+    // function filesystem is ephemeral and read-only.
     if (!url) {
-      throw new Error(
-        'TURSO_DATABASE_URL is not set. For local dev, use file:./data/iphipi.db'
-      );
+      const dataDir = resolve(process.cwd(), 'data');
+      if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+      url = `file:${resolve(dataDir, 'iphipi.db')}`;
     }
     client = createClient({
       url,
