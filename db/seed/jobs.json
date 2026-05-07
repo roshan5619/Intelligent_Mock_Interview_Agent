@@ -1,0 +1,194 @@
+[
+  {
+    "slug": "staff-backend",
+    "title": "Staff Backend Engineer",
+    "department": "Engineering",
+    "level": "Staff",
+    "location": "Remote · Global",
+    "jdMd": "## Staff Backend Engineer\n\nIPHIPI is hiring a Staff Backend Engineer to lead the technical direction of our distributed services. You'll architect, build, and operate systems that handle millions of requests per day at low latency.\n\n### Responsibilities\n- Own the design of large-scale distributed systems (sharding, consensus, eventual consistency).\n- Mentor senior engineers; set technical standards across the backend org.\n- Drive observability, reliability, and incident response practices.\n- Partner with product on roadmap tradeoffs.\n\n### Must-haves\n- 10+ years building production backend systems.\n- Deep expertise in at least one of: Java/Kotlin, Go, Rust.\n- Hands-on with cloud infrastructure (AWS, GCP, or Azure).\n- Experience designing for scale (sharding, caching, message queues).\n- Track record leading technical initiatives.\n\n### Nice-to-haves\n- Open-source contributions.\n- Experience with Kafka, gRPC, or distributed databases (Spanner, Cassandra, CockroachDB).\n- Formal distributed-systems coursework.\n",
+    "jdStruct": {
+      "responsibilities": [
+        "Architect distributed systems",
+        "Mentor senior engineers",
+        "Set technical standards",
+        "Drive reliability practices"
+      ],
+      "must_haves": [
+        "10+ years backend",
+        "Java or Kotlin or Go or Rust",
+        "AWS or GCP or Azure",
+        "scaling (sharding caching queues)",
+        "technical leadership"
+      ],
+      "nice_to_haves": [
+        "open source",
+        "Kafka or gRPC",
+        "distributed databases",
+        "distributed systems coursework"
+      ],
+      "ideal_years_experience": { "min": 10, "max": 20 },
+      "domains": ["distributed systems", "cloud", "platform"]
+    },
+    "weights": { "must_have_weight": 1.0, "nice_to_have_weight": 0.4 }
+  },
+  {
+    "slug": "senior-frontend",
+    "title": "Senior Frontend Engineer",
+    "department": "Engineering",
+    "level": "Senior",
+    "location": "Remote · Global",
+    "jdMd": "## Senior Frontend Engineer\n\nWe're hiring a Senior Frontend Engineer to build delightful, accessible, performant interfaces. You'll partner with design and product to ship features that millions love using.\n\n### Responsibilities\n- Build production React applications with strong TypeScript discipline.\n- Champion accessibility (WCAG 2.2 AA), performance (Core Web Vitals), and UX details.\n- Establish frontend architecture patterns and lead code review.\n- Collaborate on the design system.\n\n### Must-haves\n- 6+ years frontend experience, mostly with React.\n- Strong TypeScript fundamentals.\n- Experience with Next.js or a similar SSR/RSC framework.\n- Track record shipping performant UIs.\n- Comfort with modern testing (Playwright, Vitest, RTL).\n\n### Nice-to-haves\n- Animation/motion design (Framer Motion, GSAP, WebGL).\n- Design systems (Radix, shadcn/ui, headless UI).\n- Real-time / streaming UIs.\n- Mentoring experience.\n",
+    "jdStruct": {
+      "responsibilities": [
+        "Build production React apps",
+        "Champion accessibility and performance",
+        "Lead frontend architecture",
+        "Collaborate on design system"
+      ],
+      "must_haves": [
+        "6+ years frontend",
+        "React",
+        "TypeScript",
+        "Next.js or similar SSR",
+        "performance optimization",
+        "modern testing tools"
+      ],
+      "nice_to_haves": [
+        "animation libraries",
+        "design systems experience",
+        "real-time UIs",
+        "mentoring"
+      ],
+      "ideal_years_experience": { "min": 6, "max": 15 },
+      "domains": ["frontend", "ui", "web"]
+    },
+    "weights": { "must_have_weight": 1.0, "nice_to_have_weight": 0.4 }
+  },
+  {
+    "slug": "senior-data-analyst",
+    "title": "Senior Data Analyst",
+    "department": "Data",
+    "level": "Senior",
+    "location": "Remote · Global",
+    "jdMd": "## Senior Data Analyst\n\nIPHIPI is hiring a Senior Data Analyst to turn raw product telemetry into the insights that drive every roadmap decision. You'll partner with PMs, designers, and engineers across the company.\n\n### Responsibilities\n- Define metrics, build dashboards, and run experiments.\n- Translate ambiguous questions into clean SQL and rigorous analysis.\n- Communicate findings clearly to non-technical stakeholders.\n- Coach junior analysts.\n\n### Must-haves\n- 5+ years analytics experience.\n- Expert SQL.\n- Experimentation literacy (A/B tests, power, confidence intervals).\n- Strong written communication.\n- Comfort with at least one BI tool (Looker, Tableau, Mode, Hex).\n\n### Nice-to-haves\n- Python or R for analysis.\n- dbt and the modern data stack.\n- Causal inference techniques.\n- Product sense.\n",
+    "jdStruct": {
+      "responsibilities": [
+        "Define metrics and dashboards",
+        "Run experiments",
+        "Translate ambiguous questions to analysis",
+        "Coach junior analysts"
+      ],
+      "must_haves": [
+        "5+ years analytics",
+        "expert SQL",
+        "A/B testing literacy",
+        "written communication",
+        "BI tool experience"
+      ],
+      "nice_to_haves": [
+        "Python or R",
+        "dbt",
+        "causal inference",
+        "product sense"
+      ],
+      "ideal_years_experience": { "min": 5, "max": 12 },
+      "domains": ["analytics", "data", "experimentation"]
+    },
+    "weights": { "must_have_weight": 1.0, "nice_to_have_weight": 0.4 }
+  },
+  {
+    "slug": "devops-lead",
+    "title": "DevOps Lead",
+    "department": "Platform",
+    "level": "Lead",
+    "location": "Remote · Global",
+    "jdMd": "## DevOps Lead\n\nWe're looking for a DevOps Lead to own the developer-platform vision: CI/CD, infrastructure-as-code, reliability, and the inner-loop experience for our 60+ engineers.\n\n### Responsibilities\n- Lead a small platform team (3-4 engineers).\n- Own Kubernetes, Terraform, and our CI/CD pipelines.\n- Drive reliability targets (SLOs, error budgets, incident response).\n- Reduce build/test/deploy friction across the org.\n\n### Must-haves\n- 7+ years infrastructure / DevOps experience.\n- Production Kubernetes operation (not just kubectl, real cluster ops).\n- Strong Terraform or Pulumi.\n- CI/CD pipeline design (GitHub Actions, Buildkite, or similar).\n- Team leadership.\n\n### Nice-to-haves\n- Service mesh (Istio, Linkerd).\n- Observability stack ownership (Prometheus, Grafana, OpenTelemetry).\n- FinOps / cloud cost optimization.\n- Incident management playbook authorship.\n",
+    "jdStruct": {
+      "responsibilities": [
+        "Lead platform team",
+        "Own Kubernetes and Terraform",
+        "Drive reliability SLOs",
+        "Reduce build/deploy friction"
+      ],
+      "must_haves": [
+        "7+ years infrastructure",
+        "production Kubernetes",
+        "Terraform or Pulumi",
+        "CI/CD design",
+        "team leadership"
+      ],
+      "nice_to_haves": [
+        "service mesh",
+        "observability ownership",
+        "cloud cost optimization",
+        "incident management"
+      ],
+      "ideal_years_experience": { "min": 7, "max": 15 },
+      "domains": ["devops", "platform", "sre"]
+    },
+    "weights": { "must_have_weight": 1.0, "nice_to_have_weight": 0.4 }
+  },
+  {
+    "slug": "qa-engineer",
+    "title": "QA Automation Engineer",
+    "department": "Quality",
+    "level": "Senior",
+    "location": "Remote · Global",
+    "jdMd": "## QA Automation Engineer\n\nIPHIPI is hiring a Senior QA Automation Engineer to help us ship faster and safer. You'll design test architecture and write the tools that other engineers reach for daily.\n\n### Responsibilities\n- Design test pyramids spanning unit, integration, and end-to-end.\n- Build the test infrastructure that runs on every PR.\n- Author and maintain Playwright and API test suites.\n- Embed with feature teams to prevent regressions early.\n\n### Must-haves\n- 5+ years QA / SDET experience.\n- Strong with Playwright, Cypress, or Selenium.\n- API testing fundamentals (contract tests, schema validation).\n- Programming in TypeScript or Python.\n- Test-strategy thinking.\n\n### Nice-to-haves\n- Performance / load testing (k6, JMeter).\n- Mobile test automation (Appium).\n- Chaos engineering exposure.\n- Open-source test tools authored.\n",
+    "jdStruct": {
+      "responsibilities": [
+        "Design test pyramids",
+        "Build PR test infrastructure",
+        "Author Playwright suites",
+        "Embed with feature teams"
+      ],
+      "must_haves": [
+        "5+ years QA SDET",
+        "Playwright or Cypress or Selenium",
+        "API testing",
+        "TypeScript or Python",
+        "test strategy"
+      ],
+      "nice_to_haves": [
+        "performance testing",
+        "mobile automation",
+        "chaos engineering",
+        "open source"
+      ],
+      "ideal_years_experience": { "min": 5, "max": 12 },
+      "domains": ["quality", "testing", "automation"]
+    },
+    "weights": { "must_have_weight": 1.0, "nice_to_have_weight": 0.4 }
+  },
+  {
+    "slug": "product-manager",
+    "title": "Senior Product Manager",
+    "department": "Product",
+    "level": "Senior",
+    "location": "Remote · Global",
+    "jdMd": "## Senior Product Manager\n\nIPHIPI is hiring a Senior PM to own a major product surface end-to-end: discovery, strategy, delivery, and measurement.\n\n### Responsibilities\n- Define and ship a clear, opinionated product roadmap.\n- Run discovery — interviews, prototypes, data dives.\n- Partner deeply with engineering and design.\n- Define success metrics and ruthlessly measure outcomes.\n\n### Must-haves\n- 6+ years PM experience, ideally in B2B SaaS or developer tools.\n- Strong product writing and crisp narrative skills.\n- Data fluency (you write your own SQL).\n- Track record shipping at quality and scale.\n\n### Nice-to-haves\n- Engineering background.\n- AI/ML product experience.\n- 0→1 product launches.\n- Public speaking / conference talks.\n",
+    "jdStruct": {
+      "responsibilities": [
+        "Own product roadmap",
+        "Run discovery (interviews prototypes data)",
+        "Partner with engineering and design",
+        "Define success metrics"
+      ],
+      "must_haves": [
+        "6+ years PM",
+        "product writing",
+        "data fluency SQL",
+        "shipping at scale"
+      ],
+      "nice_to_haves": [
+        "engineering background",
+        "AI ML products",
+        "0 to 1 launches",
+        "public speaking"
+      ],
+      "ideal_years_experience": { "min": 6, "max": 15 },
+      "domains": ["product", "saas"]
+    },
+    "weights": { "must_have_weight": 1.0, "nice_to_have_weight": 0.4 }
+  }
+]
