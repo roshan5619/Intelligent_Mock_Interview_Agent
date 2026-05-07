@@ -34,7 +34,7 @@ export const MODELS = {
   gemini: 'gemini-2.0-flash',
   geminiPdf: 'gemini-2.0-flash',
   ollama: 'llama3.2:3b-instruct-q4_K_M',
-  embeddings: 'text-embedding-004',
+  embeddings: 'gemini-embedding-001',
   embeddingsOllama: 'nomic-embed-text',
 } as const;
 

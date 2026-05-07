@@ -1,0 +1,85 @@
+JANE EXAMPLE
+Staff Backend Engineer · 15 years · Remote (US)
+jane@example.com · linkedin.com/in/janeexample · github.com/janex
+
+----------------------------------------------------------
+SUMMARY
+----------------------------------------------------------
+Distributed-systems engineer with 15 years of experience designing,
+building, and operating high-throughput backend platforms. Most recent
+work has been leading a 7-person team rewriting a payments core from a
+sharded MySQL monolith to a Kafka + Postgres + Cassandra event-sourced
+architecture serving ~28M requests/day at p99 < 80ms. Comfortable across
+the stack from cluster ops to language-level performance work. Experienced
+mentor — three of my former reports are now Staff engineers themselves.
+
+----------------------------------------------------------
+EXPERIENCE
+----------------------------------------------------------
+STAFF BACKEND ENGINEER · Acme Payments · 2021–present
+- Architected the payments-core rewrite (Kafka + Postgres + Cassandra)
+  cutting p99 latency from 380ms to 78ms while supporting 4x growth.
+- Lead a 7-person team; set technical standards across the backend org.
+- Drove the org-wide migration to OpenTelemetry; established SLOs and
+  error-budget reviews now used by 12 teams.
+- Tech: Java 21, Kotlin, Spring Boot, Kafka, Postgres, Cassandra, AWS
+  (EKS, RDS, MSK), Terraform, OpenTelemetry, Datadog.
+
+SENIOR BACKEND ENGINEER · Northwind Logistics · 2017–2021
+- Designed the route-optimization service (Go, Postgres, Redis) handling
+  600k optimizations/day with <250ms p99.
+- Mentored 4 mid-level engineers, two of whom were promoted to Senior.
+- Tech: Go, Postgres, Redis, GCP (GKE, Cloud SQL), Pulumi, Prometheus.
+
+BACKEND ENGINEER · Cobalt Health · 2014–2017
+- Built the appointment-booking system (Java, MySQL) replacing a 10-year
+  legacy system; cut booking latency by 60%.
+- Owned the on-call rotation and incident-response playbook.
+
+SOFTWARE ENGINEER · Initech · 2010–2014
+- Maintained a Ruby on Rails monolith for a B2B fintech; led the
+  introduction of background-job processing (Sidekiq).
+
+----------------------------------------------------------
+PROJECTS (selected)
+----------------------------------------------------------
+PAYMENTS CORE REWRITE (2022–2024) · Acme Payments
+- Migrated the legacy sharded-MySQL payments engine to a Kafka + Postgres
+  + Cassandra event-sourced architecture. Designed the dual-write
+  reconciliation that allowed zero-downtime cutover.
+- Outcome: p99 latency 380→78ms, 4x throughput headroom, on-call paging
+  volume cut by 70%.
+- Tech: Java, Kotlin, Kafka, Postgres, Cassandra, Debezium.
+
+OBSERVABILITY ROLLOUT (2022) · Acme Payments
+- Replaced 5+ inconsistent logging systems with a single OpenTelemetry
+  pipeline. Authored the SLO definitions adopted by 12 teams.
+- Outcome: MTTD cut from ~14 min to ~3 min on critical incidents.
+
+ROUTE OPTIMIZATION SERVICE (2018–2020) · Northwind Logistics
+- Greenfield Go service computing daily delivery routes for 12k drivers.
+  Co-designed the constraint-solving algorithm with the data-science team.
+- Outcome: 600k optimizations/day, <250ms p99, 8% reduction in driver miles.
+
+----------------------------------------------------------
+EDUCATION
+----------------------------------------------------------
+M.S. Computer Science · State University · 2010
+- Thesis: "Concurrent Garbage Collection in Distributed Object Stores"
+B.S. Computer Engineering · State University · 2008
+
+----------------------------------------------------------
+CERTIFICATIONS
+----------------------------------------------------------
+- AWS Certified Solutions Architect — Professional (current)
+- CKA — Certified Kubernetes Administrator (current)
+
+----------------------------------------------------------
+SKILLS
+----------------------------------------------------------
+Languages: Java, Kotlin, Go, Python, SQL
+Infra: AWS (EKS, RDS, MSK, S3), GCP, Kubernetes, Terraform, Pulumi
+Data: Postgres, Cassandra, Redis, Kafka, MySQL
+Observability: OpenTelemetry, Prometheus, Grafana, Datadog
+Practices: Distributed-systems design, SLOs, incident response, mentoring,
+            code review at scale, on-call ownership.

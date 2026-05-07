@@ -1,0 +1,21 @@
+{
+  "_note": "EXAMPLE OUTPUT SHAPE — actual values vary per LLM run. The check:samples regression script asserts the structural shape and reasonable ranges, not exact equality.",
+  "match_score": 87,
+  "breakdown": {
+    "score": 87,
+    "embedding_similarity": 0.83,
+    "skill_overlap": 0.91,
+    "seniority_fit": 1.0,
+    "matched": [
+      "10+ years backend",
+      "Java or Kotlin or Go or Rust",
+      "AWS or GCP or Azure",
+      "scaling (sharding caching queues)",
+      "technical leadership",
+      "Kafka or gRPC",
+      "distributed databases"
+    ],
+    "gaps": [],
+    "rationale": "Strong fit on the distributed-systems track with 15 years of production backend ownership and demonstrated technical leadership over a 7-person team. Hands-on with the exact stack (Java/Kotlin, Kafka, Postgres) and a notable scale-out project (380ms → 78ms p99). The lone Rust ask is non-blocking; the rest of the must-haves are well-evidenced."
+  }
+}

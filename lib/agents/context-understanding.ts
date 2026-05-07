@@ -77,17 +77,43 @@ export class ContextParseError extends Error {
 
 /**
  * Parse a resume PDF buffer into a ContextProfile.
- * Uses Gemini's native PDF support — no manual text extraction.
+ *
+ * Two-stage fallback:
+ *   1. Try Gemini's native PDF understanding (no extraction loss).
+ *   2. If Gemini is rate-limited / unavailable, fall back to
+ *      extracting text via pdf-parse and routing through `parseResumeText`
+ *      (which has its own router fallback Groq → Gemini → Ollama).
  */
 export async function parseResumePdf(pdf: Buffer): Promise<ContextProfile> {
   const prompt = contextUnderstandingPrompt();
-  // Gemini gets the PDF + the system prompt together, returns JSON.
-  const result = await gemini.generateFromPdf(pdf, prompt, {
-    temperature: 0.2,
-    json: true,
-    max_tokens: 4096,
-  });
-  return parseAndValidate(result.text);
+
+  if (gemini.isAvailable()) {
+    try {
+      const result = await gemini.generateFromPdf(pdf, prompt, {
+        temperature: 0.2,
+        json: true,
+        max_tokens: 4096,
+      });
+      return parseAndValidate(result.text);
+    } catch (err) {
+      console.warn('[context-understanding] Gemini PDF failed, falling back to text extraction:', err);
+      // fall through
+    }
+  }
+
+  // Fallback: extract text from PDF and use the standard text path.
+  // pdf-parse is a CommonJS module; dynamic import keeps it out of edge bundles.
+  const pdfParseMod = (await import('pdf-parse')).default as (
+    buf: Buffer
+  ) => Promise<{ text: string }>;
+  const { text } = await pdfParseMod(pdf);
+  if (!text || text.trim().length < 30) {
+    throw new ContextParseError(
+      'PDF text extraction yielded too little content',
+      text ?? ''
+    );
+  }
+  return parseResumeText(text);
 }
 
 /** Parse already-extracted resume text. */
