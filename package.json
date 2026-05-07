@@ -1,0 +1,51 @@
+{
+  "name": "intelligent-mock-interview-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "IPHIPI — Agentic AI Mock Interview Platform with multimodal scoring (audio + video + technical) and resume-based role recommendations.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "setup": "tsx scripts/setup.ts",
+    "seed": "tsx scripts/seed.ts",
+    "check:env": "tsx scripts/check-env.ts",
+    "check:samples": "tsx scripts/check-samples.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@libsql/client": "^0.14.0",
+    "@vercel/blob": "^0.27.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.15.0",
+    "groq-sdk": "^0.9.1",
+    "lucide-react": "^0.468.0",
+    "next": "^16.2.5",
+    "pdf-parse": "^1.1.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "tailwind-merge": "^2.6.0",
+    "tailwindcss-animate": "^1.0.7",
+    "ulid": "^2.3.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/pdf-parse": "^1.1.4",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^16.2.5",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

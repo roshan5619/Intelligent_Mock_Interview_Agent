@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -----------------------------------------------------------------------------
+   IPHIPI design tokens — dark-first.
+   Light-mode tokens included for completeness; the app defaults to dark.
+   ----------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    --background: 240 50% 4%;
+    --foreground: 220 14% 96%;
+
+    --card: 240 30% 8%;
+    --card-foreground: 220 14% 96%;
+
+    --muted: 240 16% 16%;
+    --muted-foreground: 220 8% 65%;
+
+    --accent: 234 89% 74%;
+    --accent-foreground: 240 10% 4%;
+
+    --border: 240 16% 16%;
+    --ring: 234 89% 74%;
+
+    --radius: 0.75rem;
+  }
+
+  /* Apply dark by default. */
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(91, 103, 255, 0.18), transparent 60%),
+      radial-gradient(ellipse 60% 60% at 80% 100%, rgba(139, 92, 246, 0.12), transparent 60%),
+      radial-gradient(ellipse 50% 40% at 10% 100%, rgba(56, 189, 248, 0.10), transparent 60%);
+    background-attachment: fixed;
+  }
+
+  /* Smooth focus ring */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Pretty selection */
+  ::selection {
+    @apply bg-brand-500/30 text-foreground;
+  }
+}
+
+@layer components {
+  /* Glass card — used everywhere for elevated surfaces */
+  .glass {
+    @apply rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 20px 40px -20px rgba(0, 0, 0, 0.5);
+  }
+
+  .glass-strong {
+    @apply rounded-2xl border border-white/10 bg-white/[0.06] backdrop-blur-2xl;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 30px 60px -20px rgba(0, 0, 0, 0.6);
+  }
+
+  /* Brand gradient text */
+  .text-gradient {
+    @apply bg-gradient-to-br from-white via-brand-200 to-brand-400 bg-clip-text text-transparent;
+  }
+
+  /* Subtle hairline border for sections */
+  .hairline {
+    @apply border-t border-white/5;
+  }
+}
+
+@layer utilities {
+  /* Scrollbar styling for dark theme */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-white/10;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-white/20;
+  }
+}
