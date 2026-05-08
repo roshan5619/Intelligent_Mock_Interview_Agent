@@ -251,37 +251,72 @@ export function InterviewWorkspace({
     mediapipeLoopRef.current = requestAnimationFrame(tick);
   }, []);
 
+  /* ---------------- speech recognizer lifecycle ---------------- */
+
+  /**
+   * Start the SpeechRecognition the MOMENT we enter `listening` — not when
+   * VAD fires. SpeechRecognition itself takes 200-500ms to actually capture
+   * audio; if we wait for VAD, the first words of every answer are lost.
+   *
+   * We let the recognizer accumulate a transcript across both `listening`
+   * and `recording` states; VAD only signals when to STOP and submit.
+   */
+  const startRecognizer = useCallback(() => {
+    if (!isSpeechRecognitionSupported()) {
+      setTextOnly(true);
+      return;
+    }
+    if (recognizerRef.current) return; // already running
+    try {
+      recognizerRef.current = createRecognizer({
+        onPartial: (t) => setPartialTranscript(t),
+        onFinal: (t) => {
+          finalTranscriptRef.current = (
+            finalTranscriptRef.current +
+            ' ' +
+            t
+          ).trim();
+          setComposedText(finalTranscriptRef.current);
+          setPartialTranscript('');
+        },
+        onError: (err) => {
+          // SpeechRecognition can throw "no-speech" or "aborted"; usually safe to ignore.
+          // If it's an abort while we expected to be listening, restart.
+          if (
+            typeof err === 'string' &&
+            (err === 'no-speech' || err === 'aborted')
+          ) {
+            recognizerRef.current = null;
+            if (liveStateRef.current === 'listening') {
+              startRecognizer();
+            }
+          }
+        },
+      });
+      recognizerRef.current.start();
+    } catch {
+      setTextOnly(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const stopRecognizer = useCallback(() => {
+    try {
+      recognizerRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+    recognizerRef.current = null;
+  }, []);
+
   /* ---------------- VAD callbacks ---------------- */
 
   const onVadSpeechStart = useCallback(() => {
-    // Only start a turn if we're listening (not mid-AI-speech, mid-submit, paused, etc.)
+    // VAD heard the user — promote listening → recording.
+    // The recognizer is already running, so we don't restart it.
     if (liveStateRef.current !== 'listening') return;
     setLiveState('recording');
-    setComposedText('');
-    setPartialTranscript('');
-    finalTranscriptRef.current = '';
     audioAnalyzerRef.current?.beginTurn();
-
-    if (isSpeechRecognitionSupported()) {
-      try {
-        recognizerRef.current = createRecognizer({
-          onPartial: (t) => setPartialTranscript(t),
-          onFinal: (t) => {
-            finalTranscriptRef.current = (
-              finalTranscriptRef.current +
-              ' ' +
-              t
-            ).trim();
-            setComposedText(finalTranscriptRef.current);
-            setPartialTranscript('');
-          },
-        });
-        recognizerRef.current.start();
-      } catch {
-        // STT unsupported — fall back to text mode
-        setTextOnly(true);
-      }
-    }
   }, []);
 
   const onVadSpeechEnd = useCallback(() => {
@@ -290,12 +325,34 @@ export function InterviewWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* ---------------- start recognizer whenever we transition to listening ---------------- */
+  useEffect(() => {
+    if (liveState === 'listening' && !textOnly) {
+      // clear stale transcript at the start of a new turn
+      setComposedText('');
+      setPartialTranscript('');
+      finalTranscriptRef.current = '';
+      startRecognizer();
+    }
+    if (liveState === 'submitting' || liveState === 'ai_speaking' || liveState === 'paused') {
+      stopRecognizer();
+    }
+    // textOnly toggle: stop the recognizer if user switched mid-listening
+    if (textOnly) stopRecognizer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveState, textOnly]);
+
   /* ---------------- submit a turn ---------------- */
 
   const submitTurn = useCallback(async () => {
+    // Stop the recognizer FIRST so it flushes any in-flight final result,
+    // then wait a moment so the onFinal callback can update finalTranscriptRef.
+    stopRecognizer();
+    await new Promise((r) => setTimeout(r, 200));
+
     const text = (
-      composedText ||
       finalTranscriptRef.current ||
+      composedText ||
       partialTranscript
     ).trim();
     if (!text) {
@@ -305,12 +362,6 @@ export function InterviewWorkspace({
     }
 
     setLiveState('submitting');
-    try {
-      recognizerRef.current?.stop();
-    } catch {
-      /* ignore */
-    }
-    recognizerRef.current = null;
 
     // Flush per-turn metrics
     const audioMetrics: AudioMetrics | null = audioAnalyzerRef.current
@@ -365,7 +416,7 @@ export function InterviewWorkspace({
       setError(err instanceof Error ? err.message : String(err));
       setLiveState('listening');
     }
-  }, [composedText, partialTranscript, sessionId]);
+  }, [composedText, partialTranscript, sessionId, stopRecognizer]);
 
   /* ---------------- pause/resume ---------------- */
   const togglePause = useCallback(() => {
@@ -726,11 +777,18 @@ function InterviewerPane({
               </>
             )}
           </Button>
-          {textOnly && (
+          {/* Send button: always available in text mode; available in voice mode
+              as a manual escape hatch when VAD is being slow. */}
+          {(textOnly || liveState === 'recording' || liveState === 'listening') && (
             <Button
               size="sm"
               onClick={onSubmit}
-              disabled={!composedText || liveState === 'submitting'}
+              disabled={
+                liveState === 'submitting' ||
+                (textOnly
+                  ? !composedText
+                  : !composedText && !partialTranscript)
+              }
               className="ml-auto gap-1.5"
             >
               {liveState === 'submitting' ? (
@@ -739,7 +797,7 @@ function InterviewerPane({
                 </>
               ) : (
                 <>
-                  <Send className="h-3.5 w-3.5" /> Send
+                  <Send className="h-3.5 w-3.5" /> Send now
                 </>
               )}
             </Button>
