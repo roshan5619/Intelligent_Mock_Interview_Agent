@@ -254,6 +254,4 @@ vercel --prod
 
 ---
 
-## License
 
-MIT — built for the IPHPI hackathon. Use freely.
