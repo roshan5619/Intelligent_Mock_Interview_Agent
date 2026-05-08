@@ -1,25 +1,21 @@
 /**
- * InterviewWorkspace — the live multimodal interview UI.
+ * InterviewWorkspace — hands-free multimodal interview UI.
  *
- * Three zones:
- *   - LEFT:   Interviewer pane (avatar orb, current question, agenda, timer)
- *   - RIGHT:  Candidate pane (live webcam, mic level, transcript composer)
- *   - BOTTOM: Subtle agent-presence rail (audio listening, vision analyzing, ...)
+ * Design goals (post-feedback):
+ *   - Webcam is BIG and always visible with a live face-mesh overlay so the
+ *     candidate can see the vision model is doing its job.
+ *   - HANDS-FREE flow: voice activity detection auto-records when the
+ *     candidate speaks and auto-submits after 1.5s of silence. No mic button.
+ *   - Live audio waveform + live engagement / eye-contact gauges so the
+ *     candidate can feel the agents working in real time.
+ *   - "Type instead" toggle and "Pause" controls remain for accessibility.
  *
- * Lifecycle:
- *   1. PERMISSION pre-flight (camera + mic). Fails politely if denied.
- *   2. WARMUP (30s): MediaPipe loads + calibrates eye-contact baseline.
- *      Interviewer reads the opening question aloud (TTS).
- *   3. LIVE LOOP, per turn:
- *        a) Candidate clicks "Hold to speak" → STT transcribes; audio analyzer samples
- *        b) Candidate clicks "Send" (or auto-detected end) → metrics flushed
- *        c) POST /api/interview/turn → next interviewer turn streams back
- *        d) TTS speaks it → loop
- *   4. WRAP-UP: when intent === 'wrap_up' or "End interview" clicked,
- *      POST /api/interview/end → redirect to report.
- *
- * Privacy: video frames + raw audio NEVER leave the browser. We send only
- * the per-turn aggregated AudioMetrics + VisualMetrics JSON.
+ * Lifecycle phases:
+ *   preflight  → camera/mic permission gate + agenda preview
+ *   warmup     → MediaPipe loads + interviewer greets (TTS) + eye-contact baseline
+ *   live       → conversational loop (auto VAD / TTS / per-turn agents)
+ *   ending     → /api/interview/end → /report
+ *   completed  → "view report" link
  */
 'use client';
 
@@ -27,23 +23,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
-  Mic,
-  MicOff,
   Camera,
   Send,
   Loader2,
   AlertTriangle,
   Sparkles,
-  Eye,
-  Activity,
-  Brain,
   StopCircle,
-  KeyboardIcon,
+  Pause,
+  Play,
   Type,
+  Mic,
 } from 'lucide-react';
-import {
-  AudioAnalyzer,
-} from '@/lib/voice/audio-analyzer';
+import { AudioAnalyzer } from '@/lib/voice/audio-analyzer';
 import {
   createRecognizer,
   speak,
@@ -63,6 +54,7 @@ import type {
   Speaker,
   VisualMetrics,
 } from '@/lib/storage/types';
+import type { FaceLandmarkerResult } from '@mediapipe/tasks-vision';
 
 type DisplayedTurn = {
   id?: string;
@@ -82,6 +74,14 @@ type Props = {
 
 type Phase = 'preflight' | 'warmup' | 'live' | 'ending' | 'completed' | 'error';
 
+/** Conversational state inside the live phase. */
+type LiveState =
+  | 'ai_speaking'   // TTS is reading the latest interviewer turn
+  | 'listening'     // mic is hot, waiting for the candidate to start speaking
+  | 'recording'     // VAD detected speech; capturing transcript + metrics
+  | 'submitting'    // POST /api/interview/turn in flight
+  | 'paused';       // candidate hit pause — no auto VAD
+
 export function InterviewWorkspace({
   sessionId,
   targetRole,
@@ -98,46 +98,59 @@ export function InterviewWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [turns, setTurns] = useState<DisplayedTurn[]>(initialTurns);
 
-  // Latest agent turn drives the interviewer pane
   const latestAgentTurn =
     [...turns].reverse().find((t) => t.speaker === 'agent') ?? null;
 
-  const [recording, setRecording] = useState(false);
+  const [liveState, setLiveState] = useState<LiveState>('ai_speaking');
   const [partialTranscript, setPartialTranscript] = useState('');
   const [composedText, setComposedText] = useState('');
   const [textOnly, setTextOnly] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
 
-  const [agentPresence, setAgentPresence] = useState({
-    audio: false,
-    visual: false,
-    technical: false,
-  });
+  // Live gauge values (smoothed, updated every animation frame)
+  const [gauges, setGauges] = useState({ eyeContact: 0, engagement: 0, posture: 0 });
 
   const [timeRemaining, setTimeRemaining] = useState<number>(12);
 
   /* ---------------- refs ---------------- */
   const videoRef = useRef<HTMLVideoElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioAnalyzerRef = useRef<AudioAnalyzer | null>(null);
   const visionAggRef = useRef<VisionMetricsAggregator>(new VisionMetricsAggregator());
   const recognizerRef = useRef<ReturnType<typeof createRecognizer> | null>(null);
   const mediapipeLoopRef = useRef<number | null>(null);
   const finalTranscriptRef = useRef<string>('');
+  const liveStateRef = useRef<LiveState>('ai_speaking'); // mirror for callbacks
+  const lastFaceResultRef = useRef<FaceLandmarkerResult | null>(null);
+
+  // Keep liveStateRef in sync with state (callbacks need the latest)
+  useEffect(() => {
+    liveStateRef.current = liveState;
+  }, [liveState]);
+
+  /* ---------------- attach the stream to the video element ---------------- */
+  /* CRITICAL: phase changes re-mount the video element. We re-attach
+     streamRef.current any time the video element appears with no stream. */
+  useEffect(() => {
+    if (phase === 'warmup' || phase === 'live') {
+      const v = videoRef.current;
+      if (v && streamRef.current && v.srcObject !== streamRef.current) {
+        v.srcObject = streamRef.current;
+        v.play().catch(() => {/* autoplay may need a gesture; webcam works on permission grant */});
+      }
+    }
+  }, [phase]);
 
   /* ---------------- pre-flight ---------------- */
   const requestPermissions = useCallback(async () => {
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' },
-        audio: true,
+        video: { width: 1280, height: 720, facingMode: 'user' },
+        audio: { echoCancellation: true, noiseSuppression: true },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {/* autoplay may need user gesture */});
-      }
       setPhase('warmup');
       void runWarmup();
     } catch (err) {
@@ -151,15 +164,13 @@ export function InterviewWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ---------------- warmup: load MediaPipe + speak opening ---------------- */
+  /* ---------------- warmup ---------------- */
   const runWarmup = useCallback(async () => {
     try {
-      // Load CV models in parallel with the opening TTS
-      const cvPromise = Promise.all([getFaceLandmarker(), getPoseLandmarker()]);
-      const opening = latestAgentTurn?.content ?? '';
-      await Promise.all([cvPromise, opening ? speak(opening) : Promise.resolve()]);
+      // Load CV models in parallel with TTS greeting
+      await Promise.all([getFaceLandmarker(), getPoseLandmarker()]);
 
-      // Calibrate eye contact baseline using current nose position.
+      // Calibrate eye-contact baseline using current nose position
       try {
         const fl = await getFaceLandmarker();
         if (videoRef.current) {
@@ -168,32 +179,46 @@ export function InterviewWorkspace({
           if (nose) visionAggRef.current.calibrateEyeContactBaseline(nose.x);
         }
       } catch {
-        // calibration is best-effort
+        /* best-effort */
       }
 
-      // Begin the per-frame CV loop (always-on through the interview)
+      // Begin always-on MediaPipe loop
       startMediaPipeLoop();
+
+      // Begin always-on AudioAnalyzer with VAD callbacks
+      if (streamRef.current) {
+        audioAnalyzerRef.current = new AudioAnalyzer();
+        await audioAnalyzerRef.current.start(streamRef.current, {
+          onLevel: (rms) => setMicLevel(rms),
+          onSpeechStart: () => onVadSpeechStart(),
+          onSpeechEnd: () => onVadSpeechEnd(),
+        });
+      }
+
       setPhase('live');
+      // Speak the opening turn
+      if (latestAgentTurn?.content) {
+        await speak(latestAgentTurn.content);
+      }
+      // After TTS finishes, drop into listening mode
+      setLiveState('listening');
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? `Warmup failed: ${err.message}`
-          : 'Warmup failed'
-      );
+      setError(err instanceof Error ? `Warmup failed: ${err.message}` : 'Warmup failed');
       setPhase('error');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestAgentTurn]);
 
-  /* ---------------- always-on MediaPipe frame loop ---------------- */
+  /* ---------------- always-on MediaPipe loop ---------------- */
   const startMediaPipeLoop = useCallback(() => {
     let last = -1;
+    let lastGaugeUpdate = 0;
     const tick = async (ts: number) => {
       if (!videoRef.current || videoRef.current.readyState < 2) {
         mediapipeLoopRef.current = requestAnimationFrame(tick);
         return;
       }
-      // Throttle to ~15 FPS to keep CPU happy
+      // ~15 FPS for inference
       if (ts - last < 66) {
         mediapipeLoopRef.current = requestAnimationFrame(tick);
         return;
@@ -208,30 +233,35 @@ export function InterviewWorkspace({
         const poseR = pl.detectForVideo(v, tNow);
         visionAggRef.current.observeFace(faceR);
         visionAggRef.current.observePose(poseR);
-        // Pulse the visual presence light
-        setAgentPresence((p) => ({ ...p, visual: true }));
+        lastFaceResultRef.current = faceR;
+
+        // Draw the face mesh overlay
+        drawFaceMesh(overlayRef.current, videoRef.current, faceR);
+
+        // Update live gauges every ~250ms (cheap)
+        if (ts - lastGaugeUpdate > 250) {
+          lastGaugeUpdate = ts;
+          setGauges(visionAggRef.current.snapshot());
+        }
       } catch {
-        // best-effort per-frame
+        /* per-frame failures are fine */
       }
       mediapipeLoopRef.current = requestAnimationFrame(tick);
     };
     mediapipeLoopRef.current = requestAnimationFrame(tick);
   }, []);
 
-  /* ---------------- recording lifecycle ---------------- */
-  const startRecording = useCallback(async () => {
-    if (!streamRef.current) return;
+  /* ---------------- VAD callbacks ---------------- */
+
+  const onVadSpeechStart = useCallback(() => {
+    // Only start a turn if we're listening (not mid-AI-speech, mid-submit, paused, etc.)
+    if (liveStateRef.current !== 'listening') return;
+    setLiveState('recording');
     setComposedText('');
     setPartialTranscript('');
     finalTranscriptRef.current = '';
+    audioAnalyzerRef.current?.beginTurn();
 
-    setAgentPresence((p) => ({ ...p, audio: true }));
-
-    // Start audio analyzer
-    audioAnalyzerRef.current = new AudioAnalyzer();
-    await audioAnalyzerRef.current.start(streamRef.current);
-
-    // Start STT (if supported)
     if (isSpeechRecognitionSupported()) {
       try {
         recognizerRef.current = createRecognizer({
@@ -245,55 +275,54 @@ export function InterviewWorkspace({
             setComposedText(finalTranscriptRef.current);
             setPartialTranscript('');
           },
-          onError: () => {/* swallow — text fallback always available */},
         });
         recognizerRef.current.start();
       } catch {
-        // STT unsupported — text-only mode
+        // STT unsupported — fall back to text mode
         setTextOnly(true);
       }
     }
-
-    setRecording(true);
   }, []);
 
-  const stopRecording = useCallback((): AudioMetrics | null => {
-    setRecording(false);
-    setAgentPresence((p) => ({ ...p, audio: false }));
+  const onVadSpeechEnd = useCallback(() => {
+    if (liveStateRef.current !== 'recording') return;
+    void submitTurn();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ---------------- submit a turn ---------------- */
+
+  const submitTurn = useCallback(async () => {
+    const text = (
+      composedText ||
+      finalTranscriptRef.current ||
+      partialTranscript
+    ).trim();
+    if (!text) {
+      // Drop back to listening — VAD probably triggered on a noise
+      setLiveState('listening');
+      return;
+    }
+
+    setLiveState('submitting');
     try {
       recognizerRef.current?.stop();
     } catch {
-      // ignore
+      /* ignore */
     }
     recognizerRef.current = null;
 
-    if (!audioAnalyzerRef.current) return null;
-    const transcript = finalTranscriptRef.current || partialTranscript || composedText;
-    const m = audioAnalyzerRef.current.stop(transcript);
-    audioAnalyzerRef.current = null;
-    return m;
-  }, [composedText, partialTranscript]);
-
-  /* ---------------- submit a turn ---------------- */
-  const submitTurn = useCallback(async () => {
-    const text = (composedText || finalTranscriptRef.current || partialTranscript).trim();
-    if (!text) return;
-
-    setSubmitting(true);
-    setAgentPresence({ audio: false, visual: true, technical: true });
-
-    // If still recording, stop and capture audio metrics
-    let audioMetrics: AudioMetrics | null = null;
-    if (recording) audioMetrics = stopRecording();
-
-    // Flush vision aggregator for this turn
+    // Flush per-turn metrics
+    const audioMetrics: AudioMetrics | null = audioAnalyzerRef.current
+      ? audioAnalyzerRef.current.endTurn(text)
+      : null;
     const visualMetrics: VisualMetrics = visionAggRef.current.flush();
 
-    // Optimistically render the candidate turn
-    setTurns((prev) => [
-      ...prev,
-      { speaker: 'candidate', content: text },
-    ]);
+    // Optimistically append candidate turn
+    setTurns((prev) => [...prev, { speaker: 'candidate', content: text }]);
+    setComposedText('');
+    setPartialTranscript('');
+    finalTranscriptRef.current = '';
 
     try {
       const r = await fetch('/api/interview/turn', {
@@ -327,19 +356,21 @@ export function InterviewWorkspace({
         },
       ]);
       setTimeRemaining(data.timeBudgetMinutes);
-      setComposedText('');
-      setPartialTranscript('');
-      finalTranscriptRef.current = '';
-      setAgentPresence({ audio: false, visual: true, technical: false });
 
-      // Speak the next interviewer question
-      void speak(data.agentTurn.content);
+      // Speak the next interviewer turn, then drop back to listening
+      setLiveState('ai_speaking');
+      await speak(data.agentTurn.content);
+      setLiveState('listening');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSubmitting(false);
+      setLiveState('listening');
     }
-  }, [composedText, partialTranscript, recording, sessionId, stopRecording]);
+  }, [composedText, partialTranscript, sessionId]);
+
+  /* ---------------- pause/resume ---------------- */
+  const togglePause = useCallback(() => {
+    setLiveState((s) => (s === 'paused' ? 'listening' : 'paused'));
+  }, []);
 
   /* ---------------- end the interview ---------------- */
   const endInterview = useCallback(async () => {
@@ -368,8 +399,9 @@ export function InterviewWorkspace({
       try {
         recognizerRef.current?.abort();
       } catch {
-        // ignore
+        /* ignore */
       }
+      audioAnalyzerRef.current?.stop();
       disposeMediaPipe();
     };
   }, []);
@@ -386,22 +418,27 @@ export function InterviewWorkspace({
       />
     );
   }
-  if (phase === 'warmup') return <WarmupView videoRef={videoRef} />;
 
   if (phase === 'ending') {
     return (
-      <CenteredCard>
-        <Loader2 className="h-10 w-10 animate-spin text-brand-300" />
-        <h2 className="mt-6 text-xl font-semibold">Generating your report…</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Agent 6 is aggregating every signal from the session.
-        </p>
-      </CenteredCard>
+      <main className="mx-auto flex min-h-screen max-w-md items-center justify-center px-6">
+        <div className="glass-strong w-full p-10 text-center">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-brand-300" />
+          <h2 className="mt-6 text-xl font-semibold">Generating your report…</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Agent 6 is aggregating every signal from the session.
+          </p>
+        </div>
+      </main>
     );
   }
 
+  /* ----- warmup + live share the same layout, with a small overlay note in warmup ----- */
+
+  const showWarmupBanner = phase === 'warmup';
+
   return (
-    <main className="mx-auto flex h-screen max-w-7xl flex-col px-6 py-6">
+    <main className="mx-auto flex h-screen max-w-[1400px] flex-col px-4 py-4 sm:px-6 sm:py-6">
       <TopBar
         targetRole={targetRole}
         agenda={agenda}
@@ -410,25 +447,30 @@ export function InterviewWorkspace({
         onEnd={endInterview}
       />
 
-      {/* Main grid */}
-      <div className="mt-6 grid flex-1 gap-6 lg:grid-cols-[1fr_420px]">
-        <InterviewerPane turn={latestAgentTurn} agentPresence={agentPresence} />
-        <CandidatePane
-          videoRef={videoRef}
-          recording={recording}
-          partialTranscript={partialTranscript}
+      <div className="mt-4 grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        {/* LEFT: AI interviewer + transcript */}
+        <InterviewerPane
+          turn={latestAgentTurn}
+          liveState={liveState}
           composedText={composedText}
-          setComposedText={setComposedText}
+          partialTranscript={partialTranscript}
           textOnly={textOnly}
           setTextOnly={setTextOnly}
-          submitting={submitting}
-          onStartRecording={startRecording}
-          onStopRecording={() => stopRecording()}
+          setComposedText={setComposedText}
           onSubmit={submitTurn}
+          onTogglePause={togglePause}
+        />
+
+        {/* RIGHT: webcam + live gauges */}
+        <CandidateCam
+          videoRef={videoRef}
+          overlayRef={overlayRef}
+          gauges={gauges}
+          micLevel={micLevel}
+          liveState={liveState}
+          warmup={showWarmupBanner}
         />
       </div>
-
-      <PresenceRail presence={agentPresence} />
 
       {error && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-400/20 bg-red-500/5 p-3 text-sm text-red-300">
@@ -463,9 +505,9 @@ function PreflightView({
           Ready to begin?
         </h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          We'll need access to your <strong className="text-foreground">camera</strong> and{' '}
-          <strong className="text-foreground">microphone</strong>. Your video is processed
-          entirely on your device — only summary scores are sent to our server.
+          We'll need access to your <strong className="text-foreground">camera</strong>{' '}
+          and <strong className="text-foreground">microphone</strong>. Your video is
+          processed entirely on your device — only summary scores are sent to our server.
         </p>
 
         <div className="mt-8 rounded-xl border border-white/10 bg-white/[0.02] p-5 text-left">
@@ -490,7 +532,8 @@ function PreflightView({
             Allow camera & mic
           </Button>
           <p className="mt-3 text-xs text-muted-foreground">
-            Use Chrome or Edge for best results.
+            Hands-free: just speak naturally and we'll auto-detect your turn.
+            Best in Chrome / Edge.
           </p>
         </div>
         {error && (
@@ -503,60 +546,24 @@ function PreflightView({
   );
 }
 
-function WarmupView({
-  videoRef,
-}: {
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-}) {
-  return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-8 px-6">
-      <div className="glass-strong overflow-hidden rounded-2xl">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="h-[360px] w-[480px] -scale-x-100 object-cover"
-        />
-      </div>
-      <div className="text-center">
-        <Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-300" />
-        <h2 className="mt-3 text-xl font-semibold">Calibrating…</h2>
-        <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          Loading vision models, calibrating eye-contact baseline, and
-          letting the interviewer say hello. This takes about 5 seconds.
-        </p>
-      </div>
-    </main>
-  );
-}
-
 function CompletedView({ sessionId }: { sessionId: string }) {
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl items-center justify-center px-6">
-      <CenteredCard>
+      <div className="glass-strong w-full max-w-md p-10 text-center">
         <h2 className="text-xl font-semibold">This interview is complete.</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          View the report below.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">View the report below.</p>
         <a
           href={`/interview/${sessionId}/report`}
           className="mt-6 inline-block rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white"
         >
           Open report
         </a>
-      </CenteredCard>
+      </div>
     </main>
   );
 }
 
-function CenteredCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="glass-strong w-full max-w-md p-10 text-center">{children}</div>
-  );
-}
-
-/* ----- Top bar with agenda progress + timer + end button ----- */
+/* ----- Top bar ----- */
 
 function TopBar({
   targetRole,
@@ -571,7 +578,7 @@ function TopBar({
   timeRemaining: number;
   onEnd: () => void;
 }) {
-  const totalSlots = agenda.length * 2; // each agenda item is roughly 1 question + 1 follow-up
+  const totalSlots = agenda.length * 2;
   const pct = Math.min(100, (progress / totalSlots) * 100);
   return (
     <div className="glass flex items-center justify-between gap-4 px-5 py-3">
@@ -599,29 +606,43 @@ function TopBar({
   );
 }
 
-/* ----- Interviewer pane ----- */
+/* ----- Interviewer pane (LEFT) ----- */
 
 function InterviewerPane({
   turn,
-  agentPresence,
+  liveState,
+  composedText,
+  partialTranscript,
+  textOnly,
+  setTextOnly,
+  setComposedText,
+  onSubmit,
+  onTogglePause,
 }: {
   turn: DisplayedTurn | null;
-  agentPresence: { audio: boolean; visual: boolean; technical: boolean };
+  liveState: LiveState;
+  composedText: string;
+  partialTranscript: string;
+  textOnly: boolean;
+  setTextOnly: (b: boolean) => void;
+  setComposedText: (s: string) => void;
+  onSubmit: () => void;
+  onTogglePause: () => void;
 }) {
   return (
-    <section className="glass-strong relative flex flex-col p-8">
-      {/* Avatar orb */}
+    <section className="glass-strong relative flex flex-col p-6 sm:p-8">
+      {/* Avatar + meta */}
       <div className="flex items-center gap-4">
         <div className="relative flex h-14 w-14 items-center justify-center">
           <div
             className={
               'absolute inset-0 rounded-full bg-gradient-to-br from-brand-400 to-brand-700 ' +
-              (agentPresence.audio ? 'animate-pulse' : '')
+              (liveState === 'ai_speaking' ? 'animate-pulse' : '')
             }
           />
           <Sparkles className="relative h-6 w-6 text-white" />
         </div>
-        <div>
+        <div className="flex-1">
           <div className="text-xs uppercase tracking-wider text-brand-300">
             Interviewer
           </div>
@@ -634,17 +655,272 @@ function InterviewerPane({
             )}
           </div>
         </div>
+        <StatusPill state={liveState} />
       </div>
 
       {/* Question */}
-      <div className="mt-8 flex flex-1 items-start">
-        <p className="text-balance text-2xl leading-relaxed text-foreground/95">
+      <div className="mt-8 flex-1">
+        <p className="text-balance text-xl leading-relaxed text-foreground/95 sm:text-2xl">
           {turn?.content ?? 'Preparing your first question…'}
         </p>
+      </div>
+
+      {/* Live transcript */}
+      <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+        <div className="flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground">
+          <span>Your answer (live)</span>
+          <button
+            onClick={() => setTextOnly(!textOnly)}
+            className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-1 text-xs text-foreground/80 transition hover:bg-white/[0.08]"
+          >
+            {textOnly ? <Mic className="h-3 w-3" /> : <Type className="h-3 w-3" />}
+            {textOnly ? 'Voice mode' : 'Type instead'}
+          </button>
+        </div>
+
+        {textOnly ? (
+          <textarea
+            value={composedText}
+            onChange={(e) => setComposedText(e.target.value)}
+            placeholder="Type your answer here…"
+            rows={4}
+            className="mt-2 min-h-[100px] w-full resize-none rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-brand-400/50 focus:outline-none focus:ring-2 focus:ring-brand-400/30"
+          />
+        ) : (
+          <div className="mt-2 min-h-[80px] text-sm leading-relaxed text-foreground/85">
+            {composedText}
+            {partialTranscript && (
+              <span className="text-muted-foreground italic"> {partialTranscript}</span>
+            )}
+            {!composedText && !partialTranscript && (
+              <span className="text-muted-foreground/60 italic">
+                {liveState === 'listening'
+                  ? 'Speak whenever you\'re ready — we\'ll auto-submit when you pause.'
+                  : liveState === 'recording'
+                  ? 'Listening…'
+                  : liveState === 'submitting'
+                  ? 'Sending your answer…'
+                  : liveState === 'ai_speaking'
+                  ? 'Interviewer is speaking…'
+                  : 'Paused.'}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="mt-3 flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onTogglePause}
+            disabled={liveState === 'submitting' || liveState === 'ai_speaking'}
+            className="gap-1.5"
+          >
+            {liveState === 'paused' ? (
+              <>
+                <Play className="h-3.5 w-3.5" /> Resume
+              </>
+            ) : (
+              <>
+                <Pause className="h-3.5 w-3.5" /> Pause
+              </>
+            )}
+          </Button>
+          {textOnly && (
+            <Button
+              size="sm"
+              onClick={onSubmit}
+              disabled={!composedText || liveState === 'submitting'}
+              className="ml-auto gap-1.5"
+            >
+              {liveState === 'submitting' ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending
+                </>
+              ) : (
+                <>
+                  <Send className="h-3.5 w-3.5" /> Send
+                </>
+              )}
+            </Button>
+          )}
+        </div>
       </div>
     </section>
   );
 }
+
+function StatusPill({ state }: { state: LiveState }) {
+  const cfg: Record<
+    LiveState,
+    { label: string; color: string; pulse?: boolean }
+  > = {
+    ai_speaking: { label: 'Speaking', color: 'text-brand-300 border-brand-400/30 bg-brand-500/10' },
+    listening: {
+      label: 'Listening',
+      color: 'text-emerald-300 border-emerald-400/30 bg-emerald-500/10',
+      pulse: true,
+    },
+    recording: {
+      label: 'Recording',
+      color: 'text-red-300 border-red-400/30 bg-red-500/10',
+      pulse: true,
+    },
+    submitting: { label: 'Thinking', color: 'text-amber-300 border-amber-400/30 bg-amber-500/10' },
+    paused: { label: 'Paused', color: 'text-muted-foreground border-white/10 bg-white/[0.04]' },
+  };
+  const c = cfg[state];
+  return (
+    <span
+      className={
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ' +
+        c.color
+      }
+    >
+      <span
+        className={
+          'h-1.5 w-1.5 rounded-full bg-current ' + (c.pulse ? 'animate-pulse' : '')
+        }
+      />
+      {c.label}
+    </span>
+  );
+}
+
+/* ----- Candidate cam (RIGHT) ----- */
+
+function CandidateCam({
+  videoRef,
+  overlayRef,
+  gauges,
+  micLevel,
+  liveState,
+  warmup,
+}: {
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  overlayRef: React.RefObject<HTMLCanvasElement | null>;
+  gauges: { eyeContact: number; engagement: number; posture: number };
+  micLevel: number;
+  liveState: LiveState;
+  warmup: boolean;
+}) {
+  return (
+    <section className="glass relative flex flex-col p-4 sm:p-5">
+      {/* Webcam — large, mirrored, with face-mesh canvas overlay */}
+      <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black/40">
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="h-[400px] w-full -scale-x-100 object-cover sm:h-[440px]"
+        />
+        <canvas
+          ref={overlayRef}
+          className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
+        />
+
+        {/* Top-right privacy badge */}
+        <div className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-[10px] uppercase tracking-wider text-emerald-300 backdrop-blur-sm">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+          Local only · {Math.round(gauges.engagement * 100)}% engaged
+        </div>
+
+        {/* Top-left status */}
+        <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2">
+          <StatusPill state={liveState} />
+        </div>
+
+        {/* Bottom mic waveform */}
+        <div className="pointer-events-none absolute bottom-3 left-3 right-3">
+          <MicWaveform level={micLevel} active={liveState === 'recording' || liveState === 'listening'} />
+        </div>
+
+        {warmup && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="rounded-xl border border-white/10 bg-background/80 px-5 py-3 text-center">
+              <Loader2 className="mx-auto h-5 w-5 animate-spin text-brand-300" />
+              <div className="mt-2 text-xs text-foreground/85">
+                Calibrating vision baseline…
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Live metric gauges */}
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <Gauge label="Eye contact" value={gauges.eyeContact} accent="brand" />
+        <Gauge label="Engagement" value={gauges.engagement} accent="emerald" />
+        <Gauge label="Posture" value={gauges.posture} accent="violet" />
+      </div>
+
+      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+        Vision metrics update in real time. Raw video and audio never leave your
+        browser — only the per-turn summary scores reach the server.
+      </p>
+    </section>
+  );
+}
+
+function Gauge({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number;
+  accent: 'brand' | 'emerald' | 'violet';
+}) {
+  const colorClass =
+    accent === 'brand'
+      ? 'from-brand-500 to-brand-300'
+      : accent === 'emerald'
+      ? 'from-emerald-500 to-emerald-300'
+      : 'from-violet-500 to-violet-300';
+  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-muted-foreground">
+        <span>{label}</span>
+        <span className="font-mono tabular-nums text-foreground">{pct}%</span>
+      </div>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
+        <div
+          className={`h-full rounded-full bg-gradient-to-r ${colorClass} transition-all duration-300`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MicWaveform({ level, active }: { level: number; active: boolean }) {
+  // 16 bars; the `level` (RMS, ~0..0.3 typical) drives heights with subtle randomization
+  const bars = 16;
+  const lvl = Math.max(0, Math.min(1, level * 6));
+  return (
+    <div className="flex h-7 items-end justify-center gap-[2px] rounded-md bg-black/40 px-2 py-1 backdrop-blur-sm">
+      {Array.from({ length: bars }).map((_, i) => {
+        // Center bars are most active
+        const middleness = 1 - Math.abs(i - bars / 2) / (bars / 2);
+        const h = active ? Math.max(0.08, lvl * (0.4 + 0.6 * middleness)) : 0.08;
+        return (
+          <span
+            key={i}
+            className={
+              'w-[3px] rounded-full transition-[height] duration-75 ' +
+              (active ? 'bg-emerald-400/80' : 'bg-white/20')
+            }
+            style={{ height: `${Math.round(h * 100)}%` }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/* ============================================================ helpers */
 
 function intentLabel(intent: string): string {
   switch (intent) {
@@ -659,171 +935,36 @@ function intentLabel(intent: string): string {
   }
 }
 
-/* ----- Candidate pane ----- */
+/**
+ * Draw the 478 face landmarks as small dots on the overlay canvas.
+ * Cheap (a few hundred 2-pixel circles per frame).
+ */
+function drawFaceMesh(
+  canvas: HTMLCanvasElement | null,
+  video: HTMLVideoElement | null,
+  result: FaceLandmarkerResult
+): void {
+  if (!canvas || !video) return;
 
-function CandidatePane({
-  videoRef,
-  recording,
-  partialTranscript,
-  composedText,
-  setComposedText,
-  textOnly,
-  setTextOnly,
-  submitting,
-  onStartRecording,
-  onStopRecording,
-  onSubmit,
-}: {
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-  recording: boolean;
-  partialTranscript: string;
-  composedText: string;
-  setComposedText: (s: string) => void;
-  textOnly: boolean;
-  setTextOnly: (b: boolean) => void;
-  submitting: boolean;
-  onStartRecording: () => void;
-  onStopRecording: () => void;
-  onSubmit: () => void;
-}) {
-  const displayText = composedText || partialTranscript;
+  // Match canvas pixel dims to displayed video dims for crisp 1:1 dots
+  const w = video.clientWidth;
+  const h = video.clientHeight;
+  if (canvas.width !== w) canvas.width = w;
+  if (canvas.height !== h) canvas.height = h;
 
-  return (
-    <aside className="glass flex flex-col gap-4 p-5">
-      {/* Webcam */}
-      <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black/40">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="h-[200px] w-full -scale-x-100 object-cover"
-        />
-        <div className="pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-300 backdrop-blur-sm">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-          Local only
-        </div>
-      </div>
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, w, h);
 
-      {/* Mode toggle */}
-      <div className="flex gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] p-1 text-xs">
-        <button
-          onClick={() => setTextOnly(false)}
-          className={
-            'flex-1 rounded-md px-2 py-1.5 transition ' +
-            (!textOnly ? 'bg-white/[0.08] text-foreground' : 'text-muted-foreground')
-          }
-        >
-          <Mic className="mr-1 inline h-3 w-3" /> Voice
-        </button>
-        <button
-          onClick={() => setTextOnly(true)}
-          className={
-            'flex-1 rounded-md px-2 py-1.5 transition ' +
-            (textOnly ? 'bg-white/[0.08] text-foreground' : 'text-muted-foreground')
-          }
-        >
-          <Type className="mr-1 inline h-3 w-3" /> Type
-        </button>
-      </div>
+  const lm = result.faceLandmarks?.[0];
+  if (!lm || lm.length === 0) return;
 
-      {/* Composer */}
-      <textarea
-        value={displayText}
-        onChange={(e) => setComposedText(e.target.value)}
-        placeholder={
-          textOnly
-            ? 'Type your answer here…'
-            : recording
-            ? 'Listening… speak naturally.'
-            : 'Click "Hold to speak" or switch to typing.'
-        }
-        disabled={submitting}
-        rows={5}
-        className="min-h-[120px] resize-none rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-brand-400/50 focus:outline-none focus:ring-2 focus:ring-brand-400/30"
-      />
-
-      {/* Action row */}
-      <div className="flex gap-2">
-        {!textOnly && (
-          <Button
-            variant={recording ? 'default' : 'secondary'}
-            size="md"
-            className="flex-1"
-            onClick={recording ? onStopRecording : onStartRecording}
-            disabled={submitting}
-          >
-            {recording ? (
-              <>
-                <MicOff className="h-4 w-4" /> Stop
-              </>
-            ) : (
-              <>
-                <Mic className="h-4 w-4" /> Speak
-              </>
-            )}
-          </Button>
-        )}
-        <Button
-          size="md"
-          className={textOnly ? 'flex-1' : ''}
-          onClick={onSubmit}
-          disabled={submitting || (!composedText && !partialTranscript)}
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Sending
-            </>
-          ) : (
-            <>
-              <Send className="h-4 w-4" /> Send
-            </>
-          )}
-        </Button>
-      </div>
-
-      <p className="text-[10px] leading-relaxed text-muted-foreground">
-        <KeyboardIcon className="mr-1 inline h-3 w-3" />
-        Edit your transcript before sending. Voice is best in Chrome / Edge.
-      </p>
-    </aside>
-  );
-}
-
-/* ----- Bottom presence rail ----- */
-
-function PresenceRail({
-  presence,
-}: {
-  presence: { audio: boolean; visual: boolean; technical: boolean };
-}) {
-  const items = [
-    { id: 'audio', label: 'Audio listening', icon: Activity, on: presence.audio },
-    { id: 'visual', label: 'Vision analyzing', icon: Eye, on: presence.visual },
-    { id: 'technical', label: 'Tech evaluating', icon: Brain, on: presence.technical },
-  ];
-  return (
-    <div className="mt-4 flex items-center justify-center gap-6 text-xs text-muted-foreground">
-      {items.map((it) => {
-        const Icon = it.icon;
-        return (
-          <div
-            key={it.id}
-            className={
-              'inline-flex items-center gap-1.5 transition ' +
-              (it.on ? 'text-foreground' : '')
-            }
-          >
-            <span
-              className={
-                'block h-1.5 w-1.5 rounded-full ' +
-                (it.on ? 'animate-pulse bg-brand-400' : 'bg-white/15')
-              }
-            />
-            <Icon className="h-3 w-3" /> {it.label}
-          </div>
-        );
-      })}
-    </div>
-  );
+  ctx.fillStyle = 'rgba(91, 103, 255, 0.55)'; // brand-500 with alpha
+  for (const p of lm) {
+    const x = p.x * w;
+    const y = p.y * h;
+    ctx.beginPath();
+    ctx.arc(x, y, 1.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }

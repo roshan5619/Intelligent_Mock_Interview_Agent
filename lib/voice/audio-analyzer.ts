@@ -1,43 +1,67 @@
 /**
- * Audio Analyzer — browser-side, runs during a candidate's turn.
+ * AudioAnalyzer — always-on browser audio sampler with VAD + per-turn metrics.
  *
- * Uses Web Audio API to compute per-turn signals:
- *   - WPM (from the transcript + duration)
- *   - filler-word count ("um", "uh", "like", "you know")
- *   - pause ratio + silence percentage (RMS-based)
- *   - pitch mean + variance (autocorrelation)
- *   - volume RMS mean + variance
+ * Two modes layered on the same Web Audio pipeline:
  *
- * Lifecycle:
- *   const a = new AudioAnalyzer();
- *   await a.start(stream);                 // begin sampling
- *   const m = a.stop(transcript);          // returns AudioMetrics
+ *  1. ALWAYS-ON callbacks (bound at start()):
+ *     - onLevel(rms)         every ~50ms — drives the live waveform UI
+ *     - onSpeechStart()      fired once when voice activity begins
+ *     - onSpeechEnd()        fired once when voice activity ends (after a
+ *                            sustained silence threshold)
+ *     This lets us run hands-free: the UI auto-records when the candidate
+ *     speaks and auto-submits when they finish.
  *
- * Sampling cadence: ~50ms windows. Numbers are rough but cheap and useful
- * enough to give the LLM scoring agent something concrete to ground in.
+ *  2. PER-TURN metric segments:
+ *     - beginTurn()          mark the start of a candidate turn
+ *     - endTurn(transcript)  → AudioMetrics for everything since beginTurn
+ *
+ *  Lifecycle:
+ *    const a = new AudioAnalyzer();
+ *    await a.start(stream, callbacks);   // begin always-on sampling
+ *    a.beginTurn();                       // ... user starts speaking ...
+ *    const metrics = a.endTurn(text);     // ... user stopped, submit
+ *    a.stop();                            // tear down at session end
  */
 import type { AudioMetrics } from '@/lib/storage/types';
 
 const SAMPLE_INTERVAL_MS = 50;
 const SILENCE_RMS_THRESHOLD = 0.012;
+const VAD_SPEAK_RMS = 0.025;       // a bit higher than silence threshold so quiet noise doesn't trigger
+const VAD_SPEAK_HOLD_MS = 250;     // sustained speech for this long → "speech started"
+const VAD_SILENCE_HOLD_MS = 1500;  // sustained silence for this long after speech → "speech ended"
 const PAUSE_LENGTH_MS = 500;
 const FILLER_RX = /\b(um|uh|hmm+|er+|like|you\s+know)\b/gi;
+
+export type AudioCallbacks = {
+  onLevel?: (rms: number) => void;
+  onSpeechStart?: () => void;
+  onSpeechEnd?: () => void;
+};
 
 export class AudioAnalyzer {
   private ctx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private callbacks: AudioCallbacks = {};
 
+  // Always-on running aggregates of recent samples
+  private lastFireSpeech = 0;       // when VAD last fired onSpeechStart (debounce)
+  private speakingNow = false;
+  private speakStartedTs: number | null = null;
+  private silenceStartedTs: number | null = null;
+
+  // Per-turn windowed buffers
+  private turnActive = false;
+  private turnStartTs = 0;
   private rms: number[] = [];
   private pitches: number[] = [];
-  private startTs = 0;
   private silentSinceTs: number | null = null;
   private pauseCount = 0;
 
-  async start(stream: MediaStream): Promise<void> {
-    this.reset();
-    this.startTs = Date.now();
+  async start(stream: MediaStream, callbacks: AudioCallbacks = {}): Promise<void> {
+    this.callbacks = callbacks;
+    this.resetTurn();
 
     const AudioCtx =
       window.AudioContext ||
@@ -53,19 +77,17 @@ export class AudioAnalyzer {
     this.timer = setInterval(() => this.sample(buf), SAMPLE_INTERVAL_MS);
   }
 
-  stop(transcript: string): AudioMetrics {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = null;
+  /** Mark the beginning of a new candidate turn. Per-turn metrics reset. */
+  beginTurn(): void {
+    this.resetTurn();
+    this.turnActive = true;
+    this.turnStartTs = Date.now();
+  }
 
-    try {
-      this.source?.disconnect();
-      this.analyser?.disconnect();
-      this.ctx?.close();
-    } catch {
-      // best-effort teardown
-    }
-
-    const durationMs = Math.max(1, Date.now() - this.startTs);
+  /** Produce AudioMetrics for the current turn and end the turn. */
+  endTurn(transcript: string): AudioMetrics {
+    this.turnActive = false;
+    const durationMs = Math.max(1, Date.now() - this.turnStartTs);
     const durationSec = durationMs / 1000;
 
     const rmsMean = mean(this.rms);
@@ -99,7 +121,21 @@ export class AudioAnalyzer {
     };
   }
 
-  private reset() {
+  /** Tear down the analyzer and release the audio context. */
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    try {
+      this.source?.disconnect();
+      this.analyser?.disconnect();
+      this.ctx?.close();
+    } catch {
+      /* best-effort */
+    }
+    this.callbacks = {};
+  }
+
+  private resetTurn() {
     this.rms = [];
     this.pitches = [];
     this.silentSinceTs = null;
@@ -114,40 +150,96 @@ export class AudioAnalyzer {
     let sumSq = 0;
     for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i];
     const rms = Math.sqrt(sumSq / buf.length);
-    this.rms.push(rms);
 
-    // Pause detection (a continuous silent stretch ≥ PAUSE_LENGTH_MS counts as 1 pause)
-    const now = Date.now();
-    if (rms < SILENCE_RMS_THRESHOLD) {
-      if (this.silentSinceTs === null) this.silentSinceTs = now;
-      else if (now - this.silentSinceTs >= PAUSE_LENGTH_MS) {
-        this.pauseCount++;
-        this.silentSinceTs = now + 99999; // dampen — don't re-count until we hear sound again
-      }
-    } else {
-      this.silentSinceTs = null;
+    // Always: notify level for live UI
+    try {
+      this.callbacks.onLevel?.(rms);
+    } catch {
+      /* swallow callback errors */
     }
 
-    // Pitch via autocorrelation — only sample when we actually have signal
-    if (rms > SILENCE_RMS_THRESHOLD * 2 && this.ctx) {
-      const f0 = autocorrelate(buf, this.ctx.sampleRate);
-      if (f0 > 60 && f0 < 400) this.pitches.push(f0);
+    // Always: VAD edge detection
+    this.advanceVad(rms);
+
+    // Per-turn (only when a turn is active): RMS, pause count, pitch
+    if (this.turnActive) {
+      this.rms.push(rms);
+
+      const now = Date.now();
+      if (rms < SILENCE_RMS_THRESHOLD) {
+        if (this.silentSinceTs === null) this.silentSinceTs = now;
+        else if (now - this.silentSinceTs >= PAUSE_LENGTH_MS) {
+          this.pauseCount++;
+          this.silentSinceTs = now + 99999; // dampen
+        }
+      } else {
+        this.silentSinceTs = null;
+      }
+
+      if (rms > SILENCE_RMS_THRESHOLD * 2 && this.ctx) {
+        const f0 = autocorrelate(buf, this.ctx.sampleRate);
+        if (f0 > 60 && f0 < 400) this.pitches.push(f0);
+      }
+    }
+  }
+
+  private advanceVad(rms: number) {
+    const now = Date.now();
+    const above = rms > VAD_SPEAK_RMS;
+
+    if (!this.speakingNow) {
+      // Looking for the start of speech
+      if (above) {
+        if (this.speakStartedTs === null) this.speakStartedTs = now;
+        else if (now - this.speakStartedTs >= VAD_SPEAK_HOLD_MS) {
+          this.speakingNow = true;
+          this.silenceStartedTs = null;
+          this.speakStartedTs = null;
+          // Debounce — don't refire start if we just ended very recently
+          if (now - this.lastFireSpeech > 300) {
+            this.lastFireSpeech = now;
+            try {
+              this.callbacks.onSpeechStart?.();
+            } catch {
+              /* swallow */
+            }
+          }
+        }
+      } else {
+        this.speakStartedTs = null;
+      }
+    } else {
+      // Looking for the end of speech (sustained silence)
+      if (!above) {
+        if (this.silenceStartedTs === null) this.silenceStartedTs = now;
+        else if (now - this.silenceStartedTs >= VAD_SILENCE_HOLD_MS) {
+          this.speakingNow = false;
+          this.silenceStartedTs = null;
+          this.speakStartedTs = null;
+          this.lastFireSpeech = now;
+          try {
+            this.callbacks.onSpeechEnd?.();
+          } catch {
+            /* swallow */
+          }
+        }
+      } else {
+        this.silenceStartedTs = null;
+      }
     }
   }
 }
 
-/* ----- helpers ----- */
+/* ------------- helpers ------------- */
 
-/**
- * Simple time-domain autocorrelation pitch detector.
- * Adequate for human voice (~80-300 Hz). Returns -1 on no clear pitch.
- */
-function autocorrelate(buf: Float32Array<ArrayBufferLike>, sampleRate: number): number {
+function autocorrelate(
+  buf: Float32Array<ArrayBufferLike>,
+  sampleRate: number
+): number {
   const SIZE = buf.length;
   let bestOffset = -1;
   let bestCorrelation = 0;
   let lastCorrelation = 1;
-  // Look at lags 80-1000 samples (covers ~22-550 Hz at 44.1k; plenty for voice)
   for (let offset = 32; offset < 1000; offset++) {
     let correlation = 0;
     for (let i = 0; i < SIZE - offset; i++) {

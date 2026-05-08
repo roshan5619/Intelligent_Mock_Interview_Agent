@@ -65,6 +65,33 @@ export class VisionMetricsAggregator {
     this.eyeContactBaselineX = noseX;
   }
 
+  /**
+   * Live snapshot of running metrics (for the on-screen gauges).
+   * Cheap to call every animation frame; doesn't reset state.
+   */
+  snapshot(): { eyeContact: number; engagement: number; posture: number } {
+    const eye =
+      this.framesAnalyzed === 0
+        ? 0
+        : this.eyeContactFrames / this.framesAnalyzed;
+    const posture =
+      this.postureSamples.length === 0 ? 0.6 : mean(this.postureSamples);
+    // Engagement = blended smile/brow + eye contact + head stability
+    const stability = stabilityScore(this.noseXs, this.noseYs);
+    const smile = mean(this.smileSeries);
+    const brow = mean(this.browRaiseSeries);
+    const engagement =
+      0.5 +
+      0.25 * (clamp(eye, 0, 1) - 0.5) +
+      0.15 * (smile + brow) +
+      0.10 * (stability - 0.5);
+    return {
+      eyeContact: clamp(eye, 0, 1),
+      engagement: clamp(engagement, 0, 1),
+      posture: clamp(posture, 0, 1),
+    };
+  }
+
   observeFace(result: FaceLandmarkerResult) {
     this.framesAnalyzed++;
     const lm = result.faceLandmarks?.[0];
