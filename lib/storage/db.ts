@@ -45,9 +45,23 @@ function db(): Client {
       // In production / serverless we MUST have a managed DB — the function
       // filesystem is read-only so we can't fall back to local SQLite.
       if (isServerless) {
+        // Diagnostic: include what the function actually saw, without leaking
+        // secret values. Helps catch cases like Vercel "Sensitive" env vars
+        // not propagating to all function invocations.
+        const raw = process.env.TURSO_DATABASE_URL;
+        const diag = {
+          type: typeof raw,
+          length: raw?.length ?? 0,
+          all_envs_with_turso: Object.keys(process.env).filter((k) =>
+            k.toUpperCase().includes('TURSO')
+          ),
+          vercel_env: process.env.VERCEL_ENV,
+        };
         throw new Error(
-          'TURSO_DATABASE_URL is missing in this environment. Set it in the Vercel ' +
-            'project settings (Storage → Turso, or Environment Variables) and redeploy.'
+          'TURSO_DATABASE_URL is missing in this environment. ' +
+            `Diagnostic: ${JSON.stringify(diag)}. ` +
+            'Set it in Vercel project settings → Environment Variables, mark as ' +
+            '"Sensitive" but NOT empty, and redeploy.'
         );
       }
       // Local dev only: fall back to a SQLite file under ./data/

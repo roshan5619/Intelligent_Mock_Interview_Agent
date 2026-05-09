@@ -33,11 +33,26 @@ export async function GET() {
       preview: v ? v.slice(0, 8) + '…' : '',
     };
   }
+  // Try to actually open a DB connection from THIS function's runtime, to
+  // prove that lib/storage/db.ts has access to the env in a request context.
+  let db_test: { ok: boolean; error?: string; jobs_count?: number } = { ok: false };
+  try {
+    const { listJobs } = await import('@/lib/storage/db');
+    const jobs = await listJobs();
+    db_test = { ok: true, jobs_count: jobs.length };
+  } catch (err) {
+    db_test = {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+
   return NextResponse.json({
     runtime: 'nodejs',
     is_vercel: Boolean(process.env.VERCEL),
     vercel_env: process.env.VERCEL_ENV ?? null,
     cwd: process.cwd(),
     env,
+    db_test,
   });
 }
