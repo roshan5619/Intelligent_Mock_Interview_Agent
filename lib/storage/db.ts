@@ -35,21 +35,29 @@ import type {
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
 let client: Client | null = null;
 function db(): Client {
   if (!client) {
-    let url = process.env.TURSO_DATABASE_URL;
-    // Local-dev fallback: if Turso isn't configured, use a local SQLite file.
-    // Production deploys (Vercel) MUST set TURSO_DATABASE_URL since the Vercel
-    // function filesystem is ephemeral and read-only.
+    let url = process.env.TURSO_DATABASE_URL?.trim();
     if (!url) {
+      // In production / serverless we MUST have a managed DB — the function
+      // filesystem is read-only so we can't fall back to local SQLite.
+      if (isServerless) {
+        throw new Error(
+          'TURSO_DATABASE_URL is missing in this environment. Set it in the Vercel ' +
+            'project settings (Storage → Turso, or Environment Variables) and redeploy.'
+        );
+      }
+      // Local dev only: fall back to a SQLite file under ./data/
       const dataDir = resolve(process.cwd(), 'data');
       if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
       url = `file:${resolve(dataDir, 'iphipi.db')}`;
     }
     client = createClient({
       url,
-      authToken: process.env.TURSO_AUTH_TOKEN,
+      authToken: process.env.TURSO_AUTH_TOKEN?.trim() || undefined,
     });
   }
   return client;

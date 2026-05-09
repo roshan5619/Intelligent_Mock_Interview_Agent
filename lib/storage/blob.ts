@@ -16,6 +16,10 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ulid } from 'ulid';
 
+const isServerless = Boolean(
+  process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
+);
+
 export type UploadedResume = {
   /** Identifier we persist on the application row. NOT a public URL. */
   url: string;
@@ -33,18 +37,29 @@ export async function uploadResume(
   const safeName = sanitizeFilename(filename);
   const key = `resumes/${ulid()}-${safeName}`;
 
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim();
+  if (blobToken) {
     // Vercel Blob 2.x supports access: 'private'. Our store is configured as
     // private (resumes are sensitive), so we mark each upload private. The
     // returned URL is internal — only the server reads it back via head()
     // which signs the download URL with our token.
     const result = await put(key, bytes, {
-      token: process.env.BLOB_READ_WRITE_TOKEN,
+      token: blobToken,
       contentType: 'application/pdf',
       addRandomSuffix: false,
       access: 'private',
     });
     return { url: result.url, filename: safeName };
+  }
+
+  // In production / serverless we MUST have a managed blob store — the
+  // function filesystem is read-only so the local-FS fallback can't work.
+  if (isServerless) {
+    throw new Error(
+      'BLOB_READ_WRITE_TOKEN is missing in this environment. Create a Vercel ' +
+        'Blob store (Storage → Blob) in the dashboard, copy the token, set it ' +
+        'as BLOB_READ_WRITE_TOKEN in the project Environment Variables, and redeploy.'
+    );
   }
 
   // Local-dev fallback: write to ./data/uploads/ and serve via a relative URL
