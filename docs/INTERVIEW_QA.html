@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>IPHIPI — Code Walkthrough Q&A</title>
+<style>
+  :root{
+    --bg:#080a14;
+    --fg:#e7eaf3;
+    --muted:#8c93a8;
+    --card:#0f1322;
+    --card2:#141931;
+    --line:#1c2241;
+    --brand:#5b67ff;
+    --brand2:#8a6bff;
+    --emerald:#34d399;
+    --amber:#f59e0b;
+    --red:#ef4444;
+    --max:1180px;
+    --shadow:0 30px 60px -20px rgba(0,0,0,.6);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased;font-size:15px}
+  body{
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%,rgba(91,103,255,.18),transparent 60%),
+      radial-gradient(ellipse 50% 40% at 90% 100%,rgba(139,92,246,.12),transparent 60%),
+      radial-gradient(ellipse 50% 40% at 10% 100%,rgba(56,189,248,.08),transparent 60%);
+    background-attachment:fixed;
+    min-height:100vh;
+  }
+  a{color:#a8b8ff;text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:'JetBrains Mono','Fira Code',ui-monospace,Menlo,monospace;font-size:.86em;color:#dde3ff;background:rgba(255,255,255,.05);padding:1px 6px;border-radius:5px;border:1px solid rgba(255,255,255,.06)}
+  pre{margin:.6em 0 0;background:#0a0d18;border:1px solid var(--line);border-radius:10px;padding:.85em 1em;overflow-x:auto;color:#dde3ff;font-size:.86em;line-height:1.55}
+  pre code{background:none;border:none;padding:0;color:inherit}
+  hr{border:none;border-top:1px solid var(--line);margin:2em 0}
+
+  /* layout */
+  .wrap{display:grid;grid-template-columns:280px 1fr;max-width:var(--max);margin:0 auto;padding:0 24px;gap:36px}
+  @media (max-width:980px){.wrap{grid-template-columns:1fr;padding:0 18px}}
+
+  header.hero{padding:64px 24px 32px;max-width:var(--max);margin:0 auto;text-align:center}
+  header.hero .eyebrow{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);padding:6px 14px;border-radius:999px;color:var(--muted);font-size:12px;letter-spacing:.06em}
+  header.hero h1{font-size:42px;letter-spacing:-.02em;line-height:1.1;margin:.4em 0 .25em;background:linear-gradient(120deg,#fff,#a8b8ff 60%,#7d8fff);-webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p{color:var(--muted);max-width:680px;margin:0 auto;font-size:16px}
+
+  .meta{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:18px;color:var(--muted);font-size:12px}
+  .meta .tag{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);padding:4px 10px;border-radius:999px}
+
+  /* sidebar TOC */
+  aside{position:sticky;top:24px;align-self:start;max-height:calc(100vh - 48px);overflow-y:auto;padding:16px;border:1px solid var(--line);background:rgba(255,255,255,.02);border-radius:var(--radius)}
+  aside h4{margin:0 0 10px;font-size:11px;letter-spacing:.1em;color:var(--brand);text-transform:uppercase}
+  aside ol{list-style:none;margin:0;padding:0;counter-reset:section}
+  aside ol li{counter-increment:section;font-size:13px}
+  aside ol li a{display:flex;align-items:flex-start;gap:8px;padding:6px 8px;border-radius:8px;color:#bcc1d4}
+  aside ol li a:before{content:counter(section,decimal-leading-zero);font-family:JetBrains Mono,monospace;font-size:10px;color:var(--brand);min-width:22px}
+  aside ol li a:hover{background:rgba(255,255,255,.04);color:#fff;text-decoration:none}
+  aside ol li.section-spacer{height:8px}
+  aside .ftnote{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);line-height:1.5}
+
+  /* sections */
+  main{padding-bottom:120px}
+  section{margin-top:48px;scroll-margin-top:24px}
+  section .section-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px}
+  section .section-head .num{font-family:JetBrains Mono,monospace;font-size:13px;color:var(--brand);background:rgba(91,103,255,.1);border:1px solid rgba(91,103,255,.2);padding:4px 10px;border-radius:8px;letter-spacing:.06em;flex-shrink:0;line-height:1.1;margin-top:4px}
+  section h2{font-size:24px;margin:0 0 4px;letter-spacing:-.01em;color:#fff}
+  section .section-sub{color:var(--muted);font-size:14px}
+
+  /* Q&A card */
+  .qa{margin-top:14px;border:1px solid var(--line);background:linear-gradient(180deg,var(--card),var(--card2));border-radius:var(--radius);padding:18px 22px;box-shadow:var(--shadow)}
+  .qa .q{display:flex;gap:10px;align-items:flex-start;font-weight:600;font-size:16px;color:#fff}
+  .qa .q .qmark{font-family:JetBrains Mono,monospace;color:var(--brand);font-size:14px;flex-shrink:0;margin-top:2px}
+  .qa .a{margin-top:10px;color:#dadeec}
+  .qa .reason{margin-top:12px;padding:12px 14px;border-left:2px solid var(--brand);background:rgba(91,103,255,.06);border-radius:0 8px 8px 0}
+  .qa .reason .lbl{font-family:JetBrains Mono,monospace;font-size:11px;color:var(--brand);letter-spacing:.08em;text-transform:uppercase}
+  .qa .reason p{margin:.4em 0 0;color:#cdd2e6}
+  .qa .ref{margin-top:10px;font-size:12px;color:var(--muted)}
+  .qa .ref code{font-size:.92em}
+
+  ul.bullets{margin:.4em 0 0 1em;padding-left:.4em;color:#dadeec}
+  ul.bullets li{margin:4px 0}
+
+  /* utility */
+  .em{color:#fff;font-weight:500}
+  .num-callout{font-family:JetBrains Mono,monospace;color:var(--emerald)}
+  footer.foot{max-width:var(--max);margin:60px auto 30px;padding:0 24px;color:var(--muted);font-size:12px;text-align:center}
+  footer.foot a{color:#bcc1d4}
+
+  @media print{
+    body{background:#fff;color:#111}
+    .wrap{grid-template-columns:1fr;gap:0}
+    aside{display:none}
+    .qa{break-inside:avoid;border:1px solid #ccc;background:#fff;color:#111;box-shadow:none}
+    .qa .a,.qa .q,.qa .reason p{color:#222}
+    section h2,header.hero h1{color:#000;background:none;-webkit-text-fill-color:#000}
+    pre{background:#f6f6f6;color:#222;border-color:#ccc}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="eyebrow">CODE WALKTHROUGH · INTERNAL Q&A · IPHIPI HACKATHON</div>
+  <h1>IPHIPI Mock Interview Platform — Q&amp;A Reference</h1>
+  <p>An exhaustive question-and-answer walkthrough of the codebase, the six-agent architecture, and every meaningful design decision — written for an executive review where the goal is to <span class="em">understand and defend</span> every layer of the stack.</p>
+  <div class="meta">
+    <span class="tag">Repo · github.com/roshan5619/Intelligent_Mock_Interview_Agent</span>
+    <span class="tag">Live · iphpi-hackthon.vercel.app</span>
+    <span class="tag">~80 Q&A · 12 sections</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <aside>
+    <h4>Sections</h4>
+    <ol>
+      <li><a href="#s1">Overview &amp; user journey</a></li>
+      <li><a href="#s2">High-level architecture</a></li>
+      <li><a href="#s3">Tech-stack decisions</a></li>
+      <li class="section-spacer"></li>
+      <li><a href="#s4">Agent 1 · Context Understanding</a></li>
+      <li><a href="#s5">Agent 2 · Interview Orchestrator</a></li>
+      <li><a href="#s6">Agent 3 · Audio Intelligence</a></li>
+      <li><a href="#s7">Agent 4 · Visual Intelligence</a></li>
+      <li><a href="#s8">Agent 5 · Technical Evaluation</a></li>
+      <li><a href="#s9">Agent 6 · Feedback &amp; Coaching</a></li>
+      <li class="section-spacer"></li>
+      <li><a href="#s10">Per-turn data flow</a></li>
+      <li><a href="#s11">Privacy, security, scale</a></li>
+      <li><a href="#s12">Deployment &amp; ops</a></li>
+    </ol>
+    <div class="ftnote">
+      Use Ctrl/Cmd+F to search.<br>
+      Print-friendly via Ctrl/Cmd+P.
+    </div>
+  </aside>
+
+  <main>
+
+  <!-- ===================================================== Section 1 -->
+  <section id="s1">
+    <div class="section-head">
+      <span class="num">01</span>
+      <div>
+        <h2>Overview &amp; user journey</h2>
+        <div class="section-sub">What we built, who it's for, and how it feels.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What is IPHIPI in one sentence?</div>
+      <div class="a">A multimodal, agentic AI mock-interview platform that reads a candidate's resume, infers the roles they can realistically land, and conducts a live video + audio interview with adaptive questioning and explainable scoring.</div>
+      <div class="reason"><div class="lbl">Why it matters</div><p>Senior professionals lack rigorous, role-appropriate practice; static question banks don't adapt; generic LLM chats can't read body language or vocal cues. We close that gap on free SOTA models.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Who is the target user?</div>
+      <div class="a">A senior professional (10-15+ years) preparing for a technical or leadership interview at a peer company. The orchestrator, prompts, and scoring are calibrated to that seniority level.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>The brief explicitly named a 15-year senior candidate. Calibrating to that audience changed everything: the orchestrator opens with peer-level framing, not quiz-style trivia, and the technical evaluator reserves 0.9+ for genuinely outstanding answers.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Walk through the end-to-end user journey.</div>
+      <div class="a">
+        <ul class="bullets">
+          <li>Land on the IPHIPI marketing site → browse careers <em>or</em> upload a resume on <code>/match-me</code>.</li>
+          <li>The Context Understanding agent extracts a structured profile and infers target roles.</li>
+          <li>JD Match scores every IPHIPI role with explainable sub-scores (semantic + skill overlap + seniority).</li>
+          <li>Pick a role → apply → see the fit ring + breakdown.</li>
+          <li>Click <span class="em">Start mock interview</span>. The pre-flight requests camera + mic, previews the agenda, and calibrates the eye-contact baseline.</li>
+          <li>The interview runs hands-free: VAD auto-detects when the candidate speaks, transcribes live, and auto-submits ~0.9 s after they pause.</li>
+          <li>Each turn is scored in parallel by Audio, Visual, and Technical agents; the Orchestrator decides the next question and adapts difficulty.</li>
+          <li>End → Agent 6 generates a structured report with per-dimension scores, evidence quotes, and concrete next steps.</li>
+        </ul>
+      </div>
+      <div class="ref">Code: <code>app/page.tsx</code>, <code>app/match-me/</code>, <code>app/apply/[slug]/page.tsx</code>, <code>app/interview/[sessionId]/page.tsx</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What does "agentic AI" mean here? Why not a single LLM chain?</div>
+      <div class="a">Six specialized agents observe, decide, and adapt in concert: one parses, one drives the conversation, one hears, one sees, one grades, one coaches. Each is a typed module with a single responsibility.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>One mega-prompt would be cheaper to write but impossible to debug, calibrate, or replace. Decoupled agents let us swap providers per task (Gemini for PDFs, Groq for reasoning), score-test each one in isolation, and keep the technical evaluator deterministic-feeling without compromising the orchestrator's warmth.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What does "multimodal" mean in this product?</div>
+      <div class="a">The interview captures three input streams in parallel — webcam video, microphone audio, and live transcript — and produces four output dimensions: technical, communication, confidence, engagement.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>Real interviews are won and lost on body language and vocal cues, not just words. Sampling all three streams lets the report say <em>"vocal confidence dipped on the database-sharding question; pitch flattened and pauses lengthened"</em> — coaching that's impossible from text alone.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's special about the demo experience versus a normal AI chat?</div>
+      <div class="a">It's hands-free. No mic button, no Send button. Voice-activity detection auto-starts the turn ~200 ms after the candidate begins talking and auto-submits ~900 ms after they stop. The candidate just speaks naturally; the system feels like a conversation, not a form.</div>
+      <div class="ref">Code: <code>lib/voice/audio-analyzer.ts</code> (VAD), <code>components/iphipi/interview-workspace.tsx</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's the scoring philosophy?</div>
+      <div class="a">Every score ships with evidence. The match score has matched skills + gaps + a one-paragraph rationale grounded in the deterministic numbers. Every per-turn evaluation has a quoted fragment from the transcript. The final report's improvement bullets each cite a specific moment.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>"You scored 71" is useless. "You scored 71 because in turn 4 you led with the technology stack rather than the constraint it solved" is actionable. We made evidence-quoting a hard rule in every agent's system prompt.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What does success look like for the demo?</div>
+      <div class="a">A senior engineer uploads their real resume, sees the top fit role surface with believable rationale, takes a 6-turn live interview, and walks away with a report that includes one improvement they'd actually apply tomorrow.</div>
+    </div>
+  </section>
+
+  <!-- ===================================================== Section 2 -->
+  <section id="s2">
+    <div class="section-head">
+      <span class="num">02</span>
+      <div>
+        <h2>High-level architecture</h2>
+        <div class="section-sub">Where every layer lives and why.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Describe the architecture in three layers.</div>
+      <div class="a">
+        <ul class="bullets">
+          <li><span class="em">Browser:</span> handles all multimodal capture + ML — MediaStream, Web Audio, Web Speech, MediaPipe Tasks. Raw video and audio never leave the device.</li>
+          <li><span class="em">Vercel server:</span> Next.js 16 App Router on the Node runtime. Hosts marketing pages, the apply flow, and four interview API routes. Six agent modules are pure functions called from the routes.</li>
+          <li><span class="em">External services:</span> Groq Cloud (Llama 3.3 70B), Google Gemini (PDF + embeddings), Turso (libSQL DB), Vercel Blob (PDF storage). Each is reachable from Vercel functions; none requires a tunnel or a laptop.</li>
+        </ul>
+      </div>
+      <div class="ref">See: <code>docs/ARCHITECTURE.md</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why split multimodal capture into the browser?</div>
+      <div class="a">Three reasons: privacy (raw frames never leave the device), bandwidth (~2 KB of metric JSON per turn instead of MB/s of video), and the fact that browser-native ML (MediaPipe Tasks WASM) is genuinely fast and free.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>Hosting CV models server-side would require GPUs, network throughput for video, and a privacy story we'd need to defend. Browser-side MediaPipe sidesteps all three.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why Next.js full-stack on Vercel rather than React + a separate Python backend?</div>
+      <div class="a">Single repo, single deploy, single set of env vars, single CDN. Server actions and API routes live next to the pages that call them. We get edge-CDN'd marketing pages and Node-runtime API routes from the same project.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>For a 2-day prototype the integration tax of a separate Python service was the dominant cost. Next.js + Groq SDK / Gemini SDK gave us full LLM access without leaving Node.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why Turso for the database?</div>
+      <div class="a">It's libSQL — a managed, SQLite-compatible service with a generous free tier. Same SQL, same query patterns, drops into Postgres later because we use only standard SQL.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>Postgres on Neon would also work; Turso wins on local-dev parity (the same connection string can point at a local file). One DAL covers both prod and dev.</p></div>
+      <div class="ref">Code: <code>lib/storage/db.ts</code>, <code>db/schema.sql</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why Vercel Blob for resumes? Why private access?</div>
+      <div class="a">It's the lowest-friction managed object store integrated with Vercel. We use <code>access:'private'</code> because resumes are sensitive PDFs; the URL is internal and the server reads them back via <code>head()</code> with a token to obtain a signed download URL.</div>
+      <div class="ref">Code: <code>lib/storage/blob.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Walk through what happens during a single turn.</div>
+      <div class="a">
+        <ul class="bullets">
+          <li>Browser flushes <code>AudioMetrics</code> + <code>VisualMetrics</code> for the just-spoken turn.</li>
+          <li>POST <code>/api/interview/turn</code> persists the candidate turn.</li>
+          <li>Three agents fire in parallel: Audio scoring (Agent 3, LLM), Technical scoring (Agent 5, LLM), Visual scoring (Agent 4, deterministic math).</li>
+          <li>All per-dimension <code>agent_evaluations</code> rows are persisted.</li>
+          <li>The Orchestrator (Agent 2) runs with profile + agenda + transcript + latest metrics + 2-turn trends; adaptive heuristics may force <em>drop_difficulty</em>, <em>ramp_difficulty</em>, or <em>wrap_up</em>.</li>
+          <li>The next interviewer turn is persisted and returned. Browser speaks it via TTS, then the cycle repeats.</li>
+        </ul>
+      </div>
+      <div class="ref">Code: <code>app/api/interview/turn/route.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's deployed where?</div>
+      <div class="a">All Next.js routes (static + dynamic) are on Vercel. Turso runs in Turso's edge regions. Vercel Blob is in Vercel's edge storage. Groq + Gemini are reached through their public APIs from the Vercel function runtime. There is no local laptop in the production path.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is the codebase organized?</div>
+      <div class="a">
+        <ul class="bullets">
+          <li><code>app/</code> — pages and API routes (App Router). Routes contain wiring only; no domain logic.</li>
+          <li><code>lib/agents/</code> — one file per agent (six total) plus the agenda planner.</li>
+          <li><code>lib/prompts/</code> — versioned <code>.md</code> system prompts, one per agent.</li>
+          <li><code>lib/llm/</code> — multi-provider router with Groq, Gemini, and Ollama adapters.</li>
+          <li><code>lib/voice/</code>, <code>lib/vision/</code> — browser-side ML wrappers.</li>
+          <li><code>lib/storage/</code>, <code>lib/auth/</code>, <code>lib/matching/</code>, <code>lib/embeddings/</code> — supporting domains.</li>
+          <li><code>components/iphipi/</code> — branded composites (workspace, score ring, forms).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== Section 3 -->
+  <section id="s3">
+    <div class="section-head">
+      <span class="num">03</span>
+      <div>
+        <h2>Tech-stack decisions</h2>
+        <div class="section-sub">Why each tool was chosen, and what we declined.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why Groq Llama 3.3 70B as the primary reasoner?</div>
+      <div class="a">It's the fastest hosted LLM today (~500 tok/s), it's near-frontier on general reasoning benchmarks, and the free tier is comfortable (30 RPM, 14,400 RPD). The first-token latency on the Orchestrator drops to ~300 ms — the difference between feeling sluggish and feeling natural.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>Speed mattered more than the marginal quality jump from a 405B model. With six agents per turn, sub-second first-token latency is what makes the conversation feel alive.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why Gemini for PDFs and embeddings?</div>
+      <div class="a">Gemini natively understands PDFs — no <code>pdf-parse</code> step needed. <code>generateFromPdf()</code> takes the inline base64 PDF + a JSON-mode prompt and returns the structured profile in one call. Plus Gemini's embeddings (<code>gemini-embedding-001</code>) are free and 768-dim.</div>
+      <div class="ref">Code: <code>lib/llm/providers/gemini.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What is the multi-provider router and why does it exist?</div>
+      <div class="a"><code>lib/llm/client.ts</code> exposes one entry point — <code>generate()</code>, <code>generateStream()</code>, <code>embed()</code>, <code>generateFromPdf()</code> — and internally tries providers in a fallback chain (Groq → Gemini → Ollama). Each provider self-reports availability based on whether its env key is set.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>A demo cannot hard-fail when one provider's free tier hits its rate limit. The router transparently retries on the next provider, so the worst case is one extra second of latency, not a broken demo.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why MediaPipe and not, say, a vision LLM for the body-language analysis?</div>
+      <div class="a">MediaPipe Tasks is pretrained, free, runs in WASM at 15-30 FPS in the browser, and gives exact, deterministic landmarks. A vision LLM would be 1000× slower per frame and non-deterministic for tasks like "where is the nose tip".</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>The brief specifically said: <em>prefer pretrained CV over LLMs</em>. We honored it because for "is the candidate looking at the camera" you want exact pixel coordinates, not a sentence.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why Web Speech + Web Audio rather than Deepgram + Whisper?</div>
+      <div class="a">Cost (free vs paid), infra (zero vs one more vendor), latency (in-browser vs network round-trip). Trade-off: Web Speech is Chrome/Edge/Safari only, and STT quality is lower than Deepgram. The "Type instead" toggle is the always-available fallback.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why TypeScript strict and zod schemas?</div>
+      <div class="a">LLM outputs are a known source of shape drift. Every agent's output is parsed and zod-validated; a schema mismatch raises a typed error, not a silent wrong field downstream.</div>
+      <div class="ref">Code: <code>lib/agents/context-understanding.ts</code> ContextProfileSchema</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why no auth in the prototype?</div>
+      <div class="a">The candidate identity is a signed HMAC cookie — a JSON payload + HMAC-SHA256 signature keyed by <code>HMAC_SECRET</code>. Magic-link via Supabase Auth is queued for v2. The prototype's ownership checks (cookie's candidate ID matches the application/session) are sufficient for hackathon scope.</div>
+      <div class="ref">Code: <code>lib/auth/candidate-token.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What went into keeping costs at zero?</div>
+      <div class="a">Groq + Gemini free tiers, Vercel Hobby, Turso free, Vercel Blob 1 GB free. The total recurring cost is $0. The only paid scenarios are scale (rate limits) or v2 features (Deepgram, Claude Sonnet).</div>
+    </div>
+  </section>
+
+  <!-- ===================================================== Section 4 -->
+  <section id="s4">
+    <div class="section-head">
+      <span class="num">04</span>
+      <div>
+        <h2>Agent 1 · Context Understanding Module</h2>
+        <div class="section-sub">Resume → ContextProfile. The starting point for every other agent.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What does Agent 1 do?</div>
+      <div class="a">It takes a resume (PDF or text) and produces a <code>ContextProfile</code>: skills, years, roles, projects, education, certs, domains, seniority signals, and a ranked list of inferred target roles with rationale and matched evidence.</div>
+      <div class="ref">Code: <code>lib/agents/context-understanding.ts</code> · Prompt: <code>lib/prompts/01_context_understanding.md</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Walk through <code>parseResumePdf()</code> step by step.</div>
+      <div class="a">
+        <ul class="bullets">
+          <li>Try Gemini's native PDF understanding: <code>gemini.generateFromPdf(pdf, prompt, {json:true})</code> — Gemini accepts the inline base64 PDF and the system prompt together.</li>
+          <li>If Gemini fails (rate-limit, network), fall back to <code>pdf-parse</code> for text extraction, then route through <code>parseResumeText()</code> which uses the multi-provider router (Groq, then Gemini-text, then Ollama).</li>
+          <li>The raw response is stripped of markdown fences (some providers wrap JSON despite instructions) and zod-validated against <code>ContextProfileSchema</code>.</li>
+          <li>On schema mismatch, throw <code>ContextParseError</code> with the raw output for debugging.</li>
+        </ul>
+      </div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>Gemini PDF avoids extraction loss (resumes have columns, headers, spacing the regex parsers butcher). The text-fallback exists because Gemini's free tier has tight RPM limits — we cannot allow a quota error to break apply.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's in <code>ContextProfile</code> and why those fields?</div>
+      <div class="a">
+        <ul class="bullets">
+          <li><code>skills[]</code> — drives skill-overlap matching.</li>
+          <li><code>years_total</code> — drives seniority fit.</li>
+          <li><code>roles[]</code>, <code>projects[]</code>, <code>education[]</code>, <code>certs[]</code> — provide quotable evidence for the orchestrator and the report.</li>
+          <li><code>domains[]</code> — broad industry signals (fintech, ML infra, …).</li>
+          <li><code>seniority_signals[]</code> — phrases like "led team of 6" used by the orchestrator to set baseline difficulty.</li>
+          <li><code>inferred_roles[]</code> — ranked list with confidence + rationale + matched evidence; powers <code>/match-me</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is role inference done?</div>
+      <div class="a">The system prompt provides a closed taxonomy of roles (Backend, Frontend, Data Analyst, DevOps, QA, Product, Mobile, ML, SRE, Security, Eng Manager, Other). The LLM is instructed to rank 2-5 likely target roles, attaching a 0-1 confidence and 2-4 evidence quotes per role.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>Closed taxonomy prevents the model from inventing exotic roles like "Distributed Quantum Engineer" that don't exist in our jobs table.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why a separate prompt file rather than an inline string?</div>
+      <div class="a">Prompts live as <code>.md</code> files in <code>lib/prompts/</code>. They're loaded once and cached. Markdown is diff-friendly in PRs, easier to read, and trivially portable to a future prompt-management UI.</div>
+      <div class="ref">Code: <code>lib/prompts/index.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What hard rules does the prompt enforce?</div>
+      <div class="a">JSON only (no prose, no fences). Every field required. Never invent skills the candidate doesn't claim. If the input doesn't look like a resume at all, return all-empty arrays + a single Other-role at confidence 0.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>The "never invent" rule prevents the most dangerous LLM failure mode for HR tooling: false skill attribution.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is this used downstream?</div>
+      <div class="a"><code>ContextProfile</code> is persisted on <code>applications.context_profile_json</code> and read by:</div>
+      <div class="a">
+        <ul class="bullets">
+          <li>JD Match — for embedding similarity, skill overlap, seniority fit.</li>
+          <li>Agenda planner — for project deep-dives and gap probes.</li>
+          <li>Orchestrator — every turn includes an abbreviated profile for question generation.</li>
+          <li>Technical Eval — abbreviated profile lets the agent flag contradictions vs the resume.</li>
+          <li>Feedback &amp; Coaching — final report cites resume-grounded evidence.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's the latency of Agent 1?</div>
+      <div class="a">~10-20 seconds for a typical 1-2 page resume on Gemini 2.0 Flash, including PDF parsing + LLM inference + JSON validation.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is failure surfaced to the user?</div>
+      <div class="a">The apply form runs a perceived-progress trail (<em>uploading → parsing → scoring</em>). On error, an inline red box shows the message ("invalid PDF", "rate-limited", etc). The candidate page also shows a "Scoring still in progress" placeholder if the breakdown row is null.</div>
+      <div class="ref">Code: <code>components/iphipi/apply-form.tsx</code></div>
+    </div>
+  </section>
+
+  <!-- ===================================================== Section 5 -->
+  <section id="s5">
+    <div class="section-head">
+      <span class="num">05</span>
+      <div>
+        <h2>Agent 2 · Interview Orchestrator</h2>
+        <div class="section-sub">The conversational driver. Decides every next interviewer turn.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's the orchestrator's job?</div>
+      <div class="a">Look at the candidate's profile, the agenda, the transcript so far, the latest multimodal metrics, and the time budget — and emit one <code>OrchestratorDecision</code>: an <em>intent</em>, a <em>focus area</em>, a <em>difficulty</em>, a <em>question style</em>, and the actual <em>next question</em> the candidate hears.</div>
+      <div class="ref">Code: <code>lib/agents/orchestrator.ts</code> · Prompt: <code>lib/prompts/02_orchestrator.md</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What inputs does it consume per turn?</div>
+      <div class="a">An abbreviated <code>ContextProfile</code>, the target role + must-haves, the remaining agenda, the last 6 turns of transcript, the latest audio + visual + technical metrics, the 2-turn trends for confidence + correctness, and the time budget remaining.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What does <code>OrchestratorDecision</code> look like?</div>
+<pre><code>{
+  "intent": "probe_deeper" | "switch_topic" | "drop_difficulty"
+          | "ramp_difficulty" | "clarify" | "encourage" | "wrap_up",
+  "target_focus_area": string,
+  "difficulty": 1 | 2 | 3 | 4 | 5,
+  "question_style": "open_ended" | "scenario" | "system_design"
+                  | "behavioral_star" | "trivia",
+  "next_question": string  // ≤ ~50 words
+}</code></pre>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is the LLM constrained to always return valid JSON?</div>
+      <div class="a">Three things stack: (1) Groq's <code>response_format: { type: 'json_object' }</code>, (2) the system prompt's hard rule "JSON only, no fences", (3) zod validation server-side. If any layer fails the others catch it.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How does it adapt to the candidate?</div>
+      <div class="a">The LLM is given the trends, but we layer hard heuristics on top:</div>
+      <div class="a">
+        <ul class="bullets">
+          <li><code>confidence_trend</code> shows 2 consecutive turns &lt; 0.4 → force <em>drop_difficulty</em> and prepend warm encouragement to the question.</li>
+          <li><code>correctness_trend</code> shows 2 consecutive turns &gt; 0.85 → force <em>ramp_difficulty</em>.</li>
+          <li>Time budget below 2 minutes → force <em>wrap_up</em>.</li>
+        </ul>
+      </div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>Asking a 70B LLM to "be empathetic about confidence dips" is hopeful. Forcing the intent in code is reliable. The LLM still writes the actual sentence, but the policy is deterministic.</p></div>
+      <div class="ref">Code: <code>lib/agents/orchestrator.ts</code> applyHeuristics()</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Walk through <code>buildAgenda()</code>.</div>
+      <div class="a">A heuristic planner — no LLM call — that builds 5-7 agenda items deterministically:</div>
+      <div class="a">
+        <ul class="bullets">
+          <li>3 <em>core_skill</em> items, one per top must-have of the job.</li>
+          <li>2 <em>project_deep_dive</em> items from the candidate's top projects.</li>
+          <li>1 <em>behavioral</em> item, always.</li>
+          <li>1 <em>gap_probe</em> if the resume tokens don't contain a must-have keyword.</li>
+        </ul>
+      </div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>Asking an LLM to plan the agenda would add latency and variance for no quality gain — the heuristic is good enough and 100% reproducible per (resume, job) pair.</p></div>
+      <div class="ref">Code: <code>lib/agents/agenda.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How does the orchestrator stay grounded in the resume?</div>
+      <div class="a"><code>abbreviateProfile()</code> trims the profile to the orchestrator's actual context window: top 20 skills, 5 roles, 4 projects, 5 seniority signals, top 3 inferred roles. The full profile is in DB; the orchestrator only sees what's relevant for question framing.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why no streaming for the orchestrator?</div>
+      <div class="a">Each Orchestrator output is ~50 words (~100 tokens). On Groq that's ~250 ms total. Streaming adds complexity for a marginal perceived-latency win. We do speak the response via TTS the moment the JSON arrives, which is the user-facing latency that matters.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is the conversation persisted?</div>
+      <div class="a">Every turn (agent or candidate) becomes one row in <code>interview_turns</code>. Per-turn metric blobs are stored as JSON columns. <code>agent_evaluations</code> rows fan out per dimension. The session is fully resumable from <code>(session_id)</code> alone.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What guardrails prevent the orchestrator from rambling?</div>
+      <div class="a">The prompt caps <code>next_question</code> at ~50 words and forbids stacking three questions in one turn. The system role enforces a senior, peer-level tone. The model temperature is 0.7 — warm but not chaotic.</div>
+    </div>
+  </section>
+
+  <!-- ===================================================== Section 6 -->
+  <section id="s6">
+    <div class="section-head">
+      <span class="num">06</span>
+      <div>
+        <h2>Agent 3 · Audio Intelligence</h2>
+        <div class="section-sub">Hears confidence and clarity from voice + transcript.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What does Agent 3 produce?</div>
+      <div class="a">Two scores per turn — <code>confidence</code> (0-1) and <code>clarity</code> (0-1) — plus a one-sentence evidence string and a one-sentence signals summary.</div>
+      <div class="ref">Code: <code>lib/agents/audio-intelligence.ts</code> · Prompt: <code>lib/prompts/03_audio_intelligence.md</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is audio captured in the browser?</div>
+      <div class="a"><code>AudioAnalyzer</code> wires a <code>MediaStreamAudioSourceNode</code> into an <code>AnalyserNode</code> with <code>fftSize=2048</code>, then samples <code>getFloatTimeDomainData()</code> every ~50 ms.</div>
+      <div class="ref">Code: <code>lib/voice/audio-analyzer.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What signals does the analyzer compute per turn?</div>
+      <div class="a">
+        <ul class="bullets">
+          <li><span class="em">RMS mean + variance:</span> volume envelope.</li>
+          <li><span class="em">Pitch mean + variance:</span> via simple time-domain autocorrelation; flat F0 = monotone.</li>
+          <li><span class="em">Pause ratio + silence pct:</span> windows below the silence threshold.</li>
+          <li><span class="em">WPM:</span> words from the transcript divided by turn duration.</li>
+          <li><span class="em">Fillers per minute:</span> counts of "um/uh/like/you know" in the transcript.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is voice activity detection (VAD) implemented?</div>
+      <div class="a">Two-state machine on the same RMS samples: NOT_SPEAKING vs SPEAKING. We require ~200 ms of sustained energy above 0.030 to fire <em>onSpeechStart</em>, and ~900 ms of sustained silence to fire <em>onSpeechEnd</em>. Both events are surfaced as callbacks the workspace uses to drive the UI state machine.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>0.030 is a moderate floor that catches quieter speech without false-triggering on room hum. 900 ms is short enough to feel snappy, long enough that mid-sentence breath pauses don't terminate a turn.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why pitch via autocorrelation rather than FFT?</div>
+      <div class="a">Time-domain autocorrelation is computationally cheap, deterministic, and good enough for human voice (60-400 Hz). FFT-based pitch detection is more accurate but overkill for our use case — we only need mean + variance, not exact F0 contours.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why does the LLM rather than a formula assign the final scores?</div>
+      <div class="a">The metrics are inputs; the rubric requires interpretation. "WPM=180 with high pitch variance" is high confidence in one cultural context, not in another. The LLM also reads the transcript itself for hedging language ("I think maybe sort of") which a formula misses.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>We get the best of both: deterministic numbers that can't be hallucinated + a calibrated linguistic interpretation.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why <code>echoCancellation</code> and <code>noiseSuppression</code> on the mic stream?</div>
+      <div class="a">The TTS speaks the AI's question through the system speakers. Without echo cancellation that audio would loop back into the mic and trigger VAD as if the candidate were speaking. <code>echoCancellation: true</code> in <code>getUserMedia</code> filters it.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why start SpeechRecognition before VAD fires?</div>
+      <div class="a">Web Speech API takes 200-500 ms to actually start capturing after <code>.start()</code>. If we waited for VAD to fire <em>then</em> started the recognizer, we'd miss the first word(s) of every answer. The recognizer runs throughout the <em>listening</em> + <em>recording</em> states; VAD only signals when to flush.</div>
+      <div class="ref">Code: <code>components/iphipi/interview-workspace.tsx</code> startRecognizer()</div>
+    </div>
+  </section>
+
+  <!-- ===================================================== Section 7 -->
+  <section id="s7">
+    <div class="section-head">
+      <span class="num">07</span>
+      <div>
+        <h2>Agent 4 · Visual Intelligence</h2>
+        <div class="section-sub">Sees engagement and stress without ever sending video off-device.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What does Agent 4 do?</div>
+      <div class="a">Per-frame, runs MediaPipe FaceLandmarker (478 face points + blendshapes) and PoseLandmarker (33 body keypoints) to derive: eye-contact ratio, head-pose stability, posture score, smile/brow/jaw blendshapes, and blink rate. Per-turn, it produces a <code>VisualMetrics</code> blob.</div>
+      <div class="ref">Code: <code>lib/vision/metrics-aggregator.ts</code>, <code>lib/agents/visual-intelligence.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why is the server side <em>deterministic math</em> instead of an LLM?</div>
+      <div class="a">The brief specifically asked for pretrained CV. The metrics are already structured numbers — feeding them to an LLM to compute weighted averages is wasteful. We use formulas:</div>
+<pre><code>engagement = 0.5
+           + 0.25 × (eye_contact_ratio - 0.5)
+           + 0.15 × (smile + brow_raise)
+           + 0.10 × (head_pose_stability - 0.5)
+
+stress     = 0.5 × jaw_tension
+           + 0.3 × (1 - eye_contact_ratio)
+           + 0.2 × (1 - head_pose_stability)</code></pre>
+      <div class="reason"><div class="lbl">Reasoning</div><p>Cheap, deterministic, always available. The Feedback agent later reads these scores and writes the narrative interpretation, which is the right place for the LLM to add value.</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is eye contact detected?</div>
+      <div class="a">We track landmark 1 (nose tip). During the 30-second warmup we capture the candidate's natural-position nose X as a baseline. Per-frame, we count the frame as "eye contact" if the nose is within ±0.08 normalized units of baseline AND in the central X band (0.4-0.6). The ratio over the turn becomes <code>eye_contact_ratio</code>.</div>
+      <div class="reason"><div class="lbl">Reasoning</div><p>We don't have iris-gaze precision but we don't need it. Head-orientation as a proxy is reliable enough for "is the candidate looking forward at the screen".</p></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is posture computed?</div>
+      <div class="a">From PoseLandmarker landmarks 11/12 (shoulders) and 0 (nose). We measure shoulder-Y symmetry (collapsed = leaning) and head-over-shoulder centering (offset = slouching/turning). Weighted: 50% symmetry, 50% centering.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What blendshapes drive the expression signals?</div>
+      <div class="a">
+        <ul class="bullets">
+          <li><span class="em">Smile:</span> <code>mouthSmileLeft/Right</code> minus 0.5× <code>mouthFrownLeft/Right</code>.</li>
+          <li><span class="em">Brow raise:</span> max of <code>browInnerUp</code>, <code>browOuterUpLeft/Right</code>.</li>
+          <li><span class="em">Jaw tension:</span> max of <code>jawOpen</code>, <code>mouthPressLeft/Right</code>.</li>
+          <li><span class="em">Blink:</span> peak-counting on <code>eyeBlinkLeft/Right</code> &gt; 0.55.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How does the live face mesh overlay work?</div>
+      <div class="a">A <code>&lt;canvas&gt;</code> is layered on top of the <code>&lt;video&gt;</code> with the same dimensions. After each MediaPipe detection (~15 FPS), we draw all 478 landmarks as 1.1-pixel brand-colored dots. Visible proof to the candidate that the vision model is running on their face right now.</div>
+      <div class="ref">Code: <code>components/iphipi/interview-workspace.tsx</code> drawFaceMesh()</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How do the live gauges update?</div>
+      <div class="a"><code>VisionMetricsAggregator</code> exposes <code>snapshot()</code> — a running average that doesn't reset state. The MediaPipe loop calls it every 250 ms; the workspace renders Eye-contact / Engagement / Posture bars below the cam.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's the privacy story?</div>
+      <div class="a">Raw video frames never leave the browser. Only the aggregated <code>VisualMetrics</code> JSON (~2 KB) is sent per turn. The "Local only" badge in the workspace cam corner makes this visible.</div>
+    </div>
+  </section>
+
+  <!-- ===================================================== Section 8 -->
+  <section id="s8">
+    <div class="section-head">
+      <span class="num">08</span>
+      <div>
+        <h2>Agent 5 · Technical Evaluation Engine</h2>
+        <div class="section-sub">Grades each answer against the question with evidence quotes.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What does Agent 5 score per answer?</div>
+      <div class="a">Four 0-1 dimensions: <code>correctness</code>, <code>depth</code>, <code>specificity</code>, <code>concept_coverage</code>. Plus a mandatory <code>evidence_quote</code> (must be a substring of the answer) and a <code>flags</code> array.</div>
+      <div class="ref">Code: <code>lib/agents/technical-evaluation.ts</code> · Prompt: <code>lib/prompts/05_technical_evaluation.md</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What flags does it produce?</div>
+      <div class="a">
+        <ul class="bullets">
+          <li><code>hallucination</code> — candidate states something specific and false.</li>
+          <li><code>contradiction_with_resume</code> — answer contradicts a resume claim.</li>
+          <li><code>off_topic</code> — answer doesn't engage the question.</li>
+          <li><code>insufficient_detail</code> — too short to score.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is calibration enforced?</div>
+      <div class="a">The prompt instructs explicitly: <em>"most senior-engineer answers fall in 0.5-0.8; reserve 0.9+ for genuinely outstanding answers"</em>. This anchors the model so a competent answer scores ~0.7 rather than 0.95.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is the evidence quote enforced?</div>
+      <div class="a">The prompt requires the quote to be a substring of the candidate's answer; the system promises an empty string if none fits. Downstream the report cites quotes — if they were invented we'd lose trust.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why is "concept coverage" separate from correctness?</div>
+      <div class="a">A candidate can be correct but shallow (covers 1 of 5 expected concepts well) or wide but inaccurate (touches all 5 with errors). Treating coverage as its own dimension surfaces both failure modes in the report.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is the previous interviewer turn linked to this evaluation?</div>
+      <div class="a">In <code>/api/interview/turn</code>, before persisting the candidate turn, we fetch the most recent agent turn from the session. That turn's content is passed as <code>question</code> to the technical evaluator. The expected concepts can later be injected by the orchestrator (currently inferred from the question by the LLM).</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What happens if the candidate answers "I don't know"?</div>
+      <div class="a">Per the prompt, all four dimensions return 0.1 with <code>flags:["insufficient_detail"]</code>. We don't penalize at 0.0 — the candidate knew enough to say they didn't know, which is a real (small) signal.</div>
+    </div>
+  </section>
+
+  <!-- ===================================================== Section 9 -->
+  <section id="s9">
+    <div class="section-head">
+      <span class="num">09</span>
+      <div>
+        <h2>Agent 6 · Feedback &amp; Coaching</h2>
+        <div class="section-sub">Writes the final report. Runs once at end of session.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What does Agent 6 produce?</div>
+      <div class="a">A structured <code>Report</code>: a 2-sentence summary, four 0-100 dimension scores plus an overall, four markdown sections (strengths, improvements, behavioral insights, next steps).</div>
+      <div class="ref">Code: <code>lib/agents/feedback-coaching.ts</code> · Prompt: <code>lib/prompts/06_feedback_coaching.md</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What does it consume?</div>
+      <div class="a">The full transcript, the candidate's profile, the target job, and every <code>agent_evaluations</code> row from the session — pre-aggregated into per-dimension averages, "low confidence moments" (turns with confidence &lt; 0.4), and "stress peaks" (stress &gt; 0.7).</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How does pre-aggregation work?</div>
+      <div class="a"><code>aggregateMetrics()</code> walks all evaluations, groups by dimension, computes averages, and joins low-confidence and stress-peak turns back to their question stems. The LLM gets a compact JSON of aggregates + the top-12 most-extreme moments — manageable context, full evidence base.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why is <code>overall</code> recomputed server-side after the LLM returns?</div>
+      <div class="a">The prompt documents the formula <code>0.35×technical + 0.30×communication + 0.20×confidence + 0.15×engagement</code>. We recompute it server-side from the LLM-returned dimension scores so the LLM cannot drift on the weighting. Trust the LLM for narrative; trust code for arithmetic.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What style rules does the prompt enforce?</div>
+      <div class="a">
+        <ul class="bullets">
+          <li>Specific over generic ("practice STAR" → forbidden; "when asked about cross-team migration, you led with stack rather than the constraint" → required).</li>
+          <li>Quote the candidate. Every strength and improvement cites a moment.</li>
+          <li>Honest, not performative — calibrated 70-85 for a senior who held their own; 90+ rare.</li>
+          <li>Read audio + visual together (a confidence dip + posture slump + jaw tension = stress signal).</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is the report rendered?</div>
+      <div class="a">Server-rendered page at <code>/interview/[sessionId]/report</code>. A custom minimal markdown renderer handles headings, paragraphs, bullets, and bold. The score ring + per-dimension bars use the same SVG component as the apply page.</div>
+      <div class="ref">Code: <code>app/interview/[sessionId]/report/page.tsx</code></div>
+    </div>
+  </section>
+
+  <!-- ===================================================== Section 10 -->
+  <section id="s10">
+    <div class="section-head">
+      <span class="num">10</span>
+      <div>
+        <h2>Per-turn data flow</h2>
+        <div class="section-sub">How the six agents coordinate without blocking the conversation.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Walk through one full turn end-to-end.</div>
+      <div class="a">
+        <ul class="bullets">
+          <li>Candidate stops speaking → VAD fires <em>onSpeechEnd</em> in the browser.</li>
+          <li>Workspace stops the recognizer, waits 200 ms for the last final result, flushes <code>AudioMetrics</code> + <code>VisualMetrics</code>, optimistically appends the candidate turn.</li>
+          <li>POST <code>/api/interview/turn</code> with <code>{sessionId, candidateText, audioMetrics, visualMetrics}</code>.</li>
+          <li>Server persists the candidate turn.</li>
+          <li><span class="em">In parallel:</span> Agent 3 (audio LLM scoring), Agent 5 (technical LLM scoring), Agent 4 (deterministic CV math).</li>
+          <li>All per-dimension <code>agent_evaluations</code> rows are persisted.</li>
+          <li>Server builds 2-turn confidence + correctness trends.</li>
+          <li>Agent 2 (Orchestrator) runs with profile + agenda + recent turns + latest metrics + trends + time budget. Adaptive heuristics may override the intent.</li>
+          <li>New interviewer turn is persisted and returned in the JSON response.</li>
+          <li>Browser appends the agent turn, updates the gauges, speaks the question via TTS, then transitions back to <em>listening</em>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why parallel scoring?</div>
+      <div class="a">Three LLM calls + one CV math call would total ~6 s sequentially on Groq. <code>Promise.all</code> makes them ~2 s. The candidate-perceived latency is dominated by the orchestrator's call after — not the evaluators.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What if one of the parallel scorers fails?</div>
+      <div class="a">Each is wrapped in <code>.catch(err =&gt; null)</code> with a console warn. The orchestrator gracefully degrades — its prompt accepts <code>n/a</code> for any metric. The report's aggregator also tolerates missing rows.</div>
+      <div class="ref">Code: <code>app/api/interview/turn/route.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Why are turn rows persisted before evaluations?</div>
+      <div class="a">If anything fails afterward, we still have the transcript. The session is resumable from <code>(session_id)</code> and any incomplete evaluations don't block the report from running with what's there.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What schema-level constraints support resumability?</div>
+      <div class="a"><code>interview_turns</code> has <code>UNIQUE (session_id, turn_index)</code> implicitly enforced by us; <code>reports.session_id</code> is <code>UNIQUE</code> so we can <code>UPSERT</code> rather than duplicate. ULIDs sort lexicographically by time so we can replay the session in the order it happened.</div>
+    </div>
+  </section>
+
+  <!-- ===================================================== Section 11 -->
+  <section id="s11">
+    <div class="section-head">
+      <span class="num">11</span>
+      <div>
+        <h2>Privacy, security, scale</h2>
+        <div class="section-sub">What we got right at small scale and what changes at large scale.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What never leaves the browser?</div>
+      <div class="a">Raw video frames and raw audio buffers. Only the per-turn aggregated metric JSONs (~2 KB each) reach the server. The candidate sees a "Local only" badge in the cam corner reinforcing this.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How are resumes protected?</div>
+      <div class="a">Vercel Blob with <code>access:'private'</code>. Server-side reads use <code>head()</code> with the <code>BLOB_READ_WRITE_TOKEN</code> to obtain a signed download URL. The blob URL is never exposed to the client.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How is the candidate cookie tamper-proof?</div>
+      <div class="a">Format: <code>base64url(payload).base64url(hmac)</code>, where the HMAC-SHA256 is keyed by <code>HMAC_SECRET</code> over the base64url-encoded payload. Verification uses <code>timingSafeEqual</code>. Forgery requires the secret.</div>
+      <div class="ref">Code: <code>lib/auth/candidate-token.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What ownership checks are enforced?</div>
+      <div class="a">Every protected route verifies the cookie's candidate ID matches the application/session being acted on:</div>
+      <div class="a">
+        <ul class="bullets">
+          <li><code>/candidate/[id]</code> — server checks <code>application.candidate_id</code> equals the cookie's claim.</li>
+          <li><code>/api/interview/start|turn|end</code> — same check via the session's parent application.</li>
+          <li><code>/match-me/results/[runId]</code> — checks <code>role_match_runs.candidate_id</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How does the system handle rate-limited LLMs?</div>
+      <div class="a">The router falls back transparently — Groq → Gemini → Ollama. A user-facing "Live AI offline — retrying" banner only appears if every provider fails. The router logs the provider and duration for every successful call.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's the international scaling plan?</div>
+      <div class="a">
+        <ul class="bullets">
+          <li>Vercel edge for static + per-region serverless functions.</li>
+          <li>Turso has multi-region read replicas on the paid tier; we already use libSQL primitives that work with replicas.</li>
+          <li>Move the heavy LLM workload to Claude Sonnet 4.6 for better reasoning at higher latency tolerance — the orchestrator becomes 1-2 s slower but report quality jumps.</li>
+          <li>Add Upstash Redis for token-bucket rate limiting per-user + per-IP on the apply + interview-start endpoints.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's the worst-case failure for a live demo?</div>
+      <div class="a">Both Groq and Gemini being down simultaneously. We mitigate with the <code>OLLAMA_BASE_URL</code> escape hatch — if a presenter has Ollama running, the router falls back to it. The dev console logs every fallback so we always know what fired.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Are there any compliance considerations for v2?</div>
+      <div class="a">For paid customers we'd add: GDPR consent on resume upload, retention policy (auto-delete blobs after 30 days), audit log of agent decisions, and an opt-out path for using transcripts as training data. The interfaces in <code>lib/storage/</code> were designed to make these single-file additions, not rewrites.</div>
+    </div>
+  </section>
+
+  <!-- ===================================================== Section 12 -->
+  <section id="s12">
+    <div class="section-head">
+      <span class="num">12</span>
+      <div>
+        <h2>Deployment &amp; ops</h2>
+        <div class="section-sub">How this gets to production and stays there.</div>
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> Where is it deployed?</div>
+      <div class="a">Vercel — production URL <code>https://iphpi-hackthon.vercel.app</code>. The repo is connected to the project so every push to <code>main</code> triggers an auto-deploy.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's the CI/CD pipeline?</div>
+      <div class="a">Push to GitHub → Vercel webhook → Vercel build (turbopack production build, page-data collection, route generation) → atomic deploy to a fresh URL → alias to <code>iphpi-hackthon.vercel.app</code>. Average build time ~45 s.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's the one-command setup story?</div>
+      <div class="a"><code>npm run setup</code> applies the schema (idempotent CREATE TABLE IF NOT EXISTS) and seeds the 6 IPHIPI roles. Falls back to a local SQLite file in <code>./data/</code> if Turso env vars aren't set, so a developer can clone-and-run.</div>
+      <div class="ref">Code: <code>scripts/setup.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> How are secrets managed?</div>
+      <div class="a">Six env vars live in the Vercel dashboard's Environment Variables panel and are never committed (<code>.env.local</code> is gitignored). Local dev uses <code>.env.local</code>. <code>scripts/check-env.ts</code> reports which keys are set without ever printing values.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's the rollback story?</div>
+      <div class="a">Vercel keeps every previous deploy; promoting an older one is one click in the dashboard. The DB schema is purely additive (CREATE TABLE IF NOT EXISTS, no destructive migrations), so an older app version never crashes against a newer DB.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What does <code>npm run check:samples</code> verify?</div>
+      <div class="a">Runs Agent 1 against <code>samples/resumes/senior-backend.txt</code>, then JD-Match against the staff-backend role, asserting structural validity (≥5 skills, years_total≥10, score≥50, evidence quote present). Outputs are non-deterministic so we test shape, not exact values.</div>
+      <div class="ref">Code: <code>scripts/check-samples.ts</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's the demo-day playbook?</div>
+      <div class="a">
+        <ul class="bullets">
+          <li>Use Chrome (latest). Wired ethernet preferred over Wi-Fi.</li>
+          <li>Open the live URL → upload <code>samples/resumes/senior-backend.txt</code> as a PDF on <code>/match-me</code>.</li>
+          <li>Watch the ~25 s ranking → click the top role → see the fit ring + breakdown.</li>
+          <li>Click <em>Start mock interview</em> → grant camera/mic → answer 3-4 turns.</li>
+          <li>Click <em>End &amp; see report</em> → demo the per-dimension scores + coaching.</li>
+        </ul>
+      </div>
+      <div class="ref">See: <code>docs/RUNBOOK.md</code></div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What's left for v2?</div>
+      <div class="a">Magic-link auth + returning-candidate dashboard, Deepgram + ElevenLabs for cross-browser broadcast-quality voice, Claude Sonnet 4.6 as a higher-quality reasoning option, agent-decision audit logs, eval harness with golden interviews + LLM-as-judge regression tests, multi-tenant scaling + rate limiting.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="qmark">Q.</span> What can go wrong during a real demo, and what's the mitigation?</div>
+      <div class="a">
+        <ul class="bullets">
+          <li><span class="em">Groq rate limit:</span> router falls to Gemini; banner shows only if both fail.</li>
+          <li><span class="em">Camera permission denied:</span> pre-flight surfaces a clear red error with the OS-level message.</li>
+          <li><span class="em">Mic captures TTS as user voice:</span> mitigated by <code>echoCancellation:true</code> on the input stream.</li>
+          <li><span class="em">Slow inference:</span> async non-blocking evaluators keep candidate-facing latency to one LLM call per turn.</li>
+          <li><span class="em">MediaPipe model fetch blocked:</span> warmup view stays visible with a clear loading state; the workspace doesn't enter live phase until models are ready.</li>
+        </ul>
+      </div>
+    </div>
+
+  </section>
+
+  </main>
+</div>
+
+<footer class="foot">
+  IPHIPI · Agentic AI Mock Interview Platform · Internal code walkthrough · <a href="https://iphpi-hackthon.vercel.app">live demo</a> · <a href="https://github.com/roshan5619/Intelligent_Mock_Interview_Agent">source</a>
+</footer>
+
+<script>
+  // Sidebar active-section highlighting via IntersectionObserver.
+  (function(){
+    var sections = document.querySelectorAll('main section[id]');
+    var navLinks = document.querySelectorAll('aside ol li a');
+    var byId = {};
+    navLinks.forEach(function(a){ byId[a.getAttribute('href').slice(1)] = a; });
+
+    function setActive(id){
+      navLinks.forEach(function(a){
+        a.style.background = '';
+        a.style.color = '';
+      });
+      var a = byId[id];
+      if(a){
+        a.style.background = 'rgba(91,103,255,.15)';
+        a.style.color = '#fff';
+      }
+    }
+
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting) setActive(e.target.id);
+      });
+    },{ rootMargin:'-30% 0px -65% 0px' });
+    sections.forEach(function(s){ io.observe(s); });
+  })();
+</script>
+
+</body>
+</html>
