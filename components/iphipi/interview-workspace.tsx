@@ -746,9 +746,9 @@ function InterviewerPane({
             {!composedText && !partialTranscript && (
               <span className="text-muted-foreground/60 italic">
                 {liveState === 'listening'
-                  ? 'Speak whenever you\'re ready — we\'ll auto-submit when you pause.'
+                  ? 'Just speak — we hear you, transcribe live, and submit ~1s after you stop.'
                   : liveState === 'recording'
-                  ? 'Listening…'
+                  ? 'Listening… (auto-submits when you pause)'
                   : liveState === 'submitting'
                   ? 'Sending your answer…'
                   : liveState === 'ai_speaking'
@@ -777,18 +777,14 @@ function InterviewerPane({
               </>
             )}
           </Button>
-          {/* Send button: always available in text mode; available in voice mode
-              as a manual escape hatch when VAD is being slow. */}
-          {(textOnly || liveState === 'recording' || liveState === 'listening') && (
+          {/* In text mode the Send button is the primary action.
+              In voice mode there is NO button — the system auto-submits
+              ~0.9s after you stop speaking. */}
+          {textOnly && (
             <Button
               size="sm"
               onClick={onSubmit}
-              disabled={
-                liveState === 'submitting' ||
-                (textOnly
-                  ? !composedText
-                  : !composedText && !partialTranscript)
-              }
+              disabled={!composedText || liveState === 'submitting'}
               className="ml-auto gap-1.5"
             >
               {liveState === 'submitting' ? (
@@ -797,7 +793,7 @@ function InterviewerPane({
                 </>
               ) : (
                 <>
-                  <Send className="h-3.5 w-3.5" /> Send now
+                  <Send className="h-3.5 w-3.5" /> Send
                 </>
               )}
             </Button>

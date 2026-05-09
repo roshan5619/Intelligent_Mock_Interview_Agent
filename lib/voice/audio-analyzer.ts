@@ -26,9 +26,9 @@ import type { AudioMetrics } from '@/lib/storage/types';
 
 const SAMPLE_INTERVAL_MS = 50;
 const SILENCE_RMS_THRESHOLD = 0.012;
-const VAD_SPEAK_RMS = 0.04;        // higher floor so room noise doesn't false-trigger
-const VAD_SPEAK_HOLD_MS = 200;     // a quick, two-frame burst of speech is enough to start
-const VAD_SILENCE_HOLD_MS = 1300;  // ~1.3s pause after talking → submit
+const VAD_SPEAK_RMS = 0.030;       // moderate floor — catches quiet speech but not room hum
+const VAD_SPEAK_HOLD_MS = 180;     // quick start (~3 frames at 50ms)
+const VAD_SILENCE_HOLD_MS = 900;   // ~0.9s pause after talking → auto-submit
 const PAUSE_LENGTH_MS = 500;
 const FILLER_RX = /\b(um|uh|hmm+|er+|like|you\s+know)\b/gi;
 
