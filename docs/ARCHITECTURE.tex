@@ -761,6 +761,328 @@ the technology stack rather than the constraint it solved'' is actionable.
 \end{enumerate}
 
 %%------------------------------------------------------------------%%
+\section{Running the Project Locally}\label{sec:run}
+
+\subsection{Prerequisites}
+
+\begin{itemize}
+  \item \textbf{Node.js} 20 LTS or newer (\texttt{node -{}-version} should
+        report \texttt{v20.x} or higher).
+  \item \textbf{Git} (any recent version).
+  \item A \textbf{Chromium-based browser} (Chrome / Edge / Brave) for the
+        interview workspace.
+  \item Three \emph{free} accounts:
+        \href{https://console.groq.com}{Groq Cloud} (LLM),
+        \href{https://aistudio.google.com/apikey}{Google AI Studio}
+        (Gemini for PDF + embeddings), and
+        \href{https://vercel.com}{Vercel} (hosting + Blob; only required
+        for production deploy).
+        \href{https://turso.tech}{Turso} (libSQL DB) is optional --- the
+        app falls back to a local SQLite file if the Turso env vars are
+        absent.
+\end{itemize}
+
+\subsection{One-time setup (5 commands)}
+
+\begin{lstlisting}[language=bash]
+# 1. Clone
+git clone https://github.com/roshan5619/Intelligent_Mock_Interview_Agent.git
+cd Intelligent_Mock_Interview_Agent
+
+# 2. Copy env template and fill in values (see next subsection)
+copy .env.example .env.local         # Windows PowerShell
+# OR  cp .env.example .env.local      # macOS / Linux
+
+# 3. Install dependencies
+npm install
+
+# 4. Apply schema + seed the 6 IPHIPI demo roles (idempotent)
+npm run setup
+
+# 5. Launch the dev server
+npm run dev                          # http://localhost:3000
+\end{lstlisting}
+
+\subsection{Required environment variables}
+
+Open \texttt{.env.local} and fill in the following. Only the three keys
+marked \emph{required} are needed for local development; the rest enable
+production features (managed DB, blob storage, offline LLM).
+
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}p{4.6cm} p{1.6cm} p{8.6cm}@{}}
+\toprule
+\textbf{Variable} & \textbf{Status} & \textbf{Purpose / source} \\
+\midrule
+\texttt{GROQ\_API\_KEY}                 & required & Llama 3.3 70B inference --- console.groq.com \\
+\texttt{GOOGLE\_GENERATIVE\_AI\_API\_KEY} & required & Gemini PDF + embeddings --- aistudio.google.com/apikey \\
+\texttt{HMAC\_SECRET}                   & required & Cookie signing; generate locally (PowerShell one-liner below) \\
+\texttt{TURSO\_DATABASE\_URL}           & optional & Managed libSQL; falls back to \texttt{./data/iphipi.db} if blank \\
+\texttt{TURSO\_AUTH\_TOKEN}             & optional & Turso auth token \\
+\texttt{BLOB\_READ\_WRITE\_TOKEN}       & optional & Vercel Blob; falls back to \texttt{./data/uploads/} if blank \\
+\texttt{OLLAMA\_BASE\_URL}              & optional & Local LLM fallback if Groq + Gemini both fail \\
+\bottomrule
+\end{tabular}
+\caption{Environment variables. \texttt{.env.local} is gitignored.}
+\end{table}
+
+\paragraph{Generate \texttt{HMAC\_SECRET} (Windows PowerShell):}
+\begin{lstlisting}[language=bash]
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+\end{lstlisting}
+
+\paragraph{Generate \texttt{HMAC\_SECRET} (macOS / Linux):}
+\begin{lstlisting}[language=bash]
+openssl rand -base64 32
+\end{lstlisting}
+
+\subsection{Useful npm scripts}
+
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}lp{10.5cm}@{}}
+\toprule
+\textbf{Script} & \textbf{Purpose} \\
+\midrule
+\texttt{npm run dev}            & Next.js dev server with hot reload (\texttt{localhost:3000}) \\
+\texttt{npm run build}          & Production build (validates type-check + bundles) \\
+\texttt{npm run start}          & Run the production build locally \\
+\texttt{npm run setup}          & Apply DB schema + seed 6 IPHIPI roles (idempotent) \\
+\texttt{npm run check:env}      & Report which env vars are configured (presence only) \\
+\texttt{npm run check:samples}  & Run pipeline against \texttt{samples/resumes/senior-backend.txt} and assert structural validity of Agent 1 + JD-match outputs \\
+\texttt{npm run typecheck}      & \texttt{tsc -{}-noEmit} across the whole project \\
+\texttt{npm run lint}           & Next.js / ESLint check \\
+\bottomrule
+\end{tabular}
+\caption{Project npm scripts.}
+\end{table}
+
+\subsection{Verify the install}
+
+After \texttt{npm run setup}, hit:
+\begin{itemize}
+  \item \texttt{http://localhost:3000} --- landing page should render
+        with the brand gradient hero.
+  \item \texttt{http://localhost:3000/careers} --- six seeded IPHIPI roles
+        should appear as cards.
+  \item \texttt{http://localhost:3000/api/health} --- diagnostic JSON
+        showing each env var's presence and a live DB connectivity test
+        (\texttt{db\_test.ok = true}, \texttt{jobs\_count = 6}).
+  \item \texttt{npm run check:samples} --- should print
+        \texttt{All sample checks passed.} after exercising Agent 1 plus
+        the matching engine against live APIs.
+\end{itemize}
+
+\subsection{Running the live interview}
+
+Open \texttt{http://localhost:3000/match-me} in Chrome, upload a PDF
+resume (a sample is provided at
+\texttt{samples/resumes/senior-backend.txt} --- print to PDF or supply
+your own), wait $\sim$25~s for ranking, click the top-ranked role, then
+click \emph{Start mock interview}. Grant camera and microphone
+permissions when prompted; the rest is hands-free.
+
+\subsection{Deploying to Vercel}
+
+\begin{lstlisting}[language=bash]
+# One time
+npm i -g vercel
+vercel link                    # interactive: pick scope, accept defaults
+
+# Set the env vars in the Vercel dashboard:
+#   Project Settings --> Environment Variables
+#   Add all six keys for "Production" (and "Preview" if desired).
+
+# Deploy
+vercel --prod
+\end{lstlisting}
+
+\noindent The repository is connected to the Vercel project, so subsequent
+\texttt{git push} to \texttt{main} triggers an automatic production
+deploy.
+
+%%------------------------------------------------------------------%%
+\section{Repository Structure}\label{sec:repo}
+
+The codebase is organised so each agent and adapter lives behind a clean
+interface. Pages and API routes wire modules together but contain no
+domain logic; tests can swap any agent or adapter for a fake.
+
+\subsection{Top-level layout}
+
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+Intelligent_Mock_Interview_Agent/
+|
++-- app/                                 # Next.js App Router (pages + API routes)
+|   +-- page.tsx                         # marketing landing
+|   +-- layout.tsx
+|   +-- globals.css
+|   +-- careers/
+|   |   +-- page.tsx                     # role grid (DB-backed)
+|   |   +-- [slug]/page.tsx              # role detail + apply CTA
+|   +-- apply/
+|   |   +-- [slug]/page.tsx              # resume upload form for one role
+|   +-- candidate/
+|   |   +-- [id]/page.tsx                # post-apply view: animated score + breakdown
+|   +-- match-me/
+|   |   +-- page.tsx                     # upload resume to rank ALL IPHIPI roles
+|   |   +-- results/[runId]/page.tsx     # ranked results with "why this fits"
+|   +-- interview/
+|   |   +-- [sessionId]/
+|   |       +-- page.tsx                 # live interview workspace shell
+|   |       +-- report/page.tsx          # post-session coaching report
+|   +-- api/
+|       +-- apply/route.ts               # POST: apply pipeline
+|       +-- match/rank-all/route.ts      # POST: rank against all jobs
+|       +-- interview/start/route.ts     # POST: open session, seed agenda + first turn
+|       +-- interview/turn/route.ts      # POST: per-turn orchestration (six agents)
+|       +-- interview/end/route.ts       # POST: run Agent 6 and persist report
+|       +-- health/route.ts              # GET:  diagnostic
+|
++-- lib/                                 # Domain logic (pure, testable, decoupled)
+|   +-- agents/                          # ONE FILE PER AGENT
+|   |   +-- context-understanding.ts     # Agent 1
+|   |   +-- orchestrator.ts              # Agent 2 + adaptive heuristics
+|   |   +-- audio-intelligence.ts        # Agent 3 (server scoring half)
+|   |   +-- visual-intelligence.ts       # Agent 4 (deterministic CV math)
+|   |   +-- technical-evaluation.ts      # Agent 5
+|   |   +-- feedback-coaching.ts         # Agent 6
+|   |   +-- agenda.ts                    # heuristic agenda planner
+|   +-- prompts/                         # Versioned .md system prompts
+|   |   +-- index.ts                     # cached file loader
+|   |   +-- 01_context_understanding.md
+|   |   +-- 02_orchestrator.md
+|   |   +-- 03_audio_intelligence.md
+|   |   +-- 05_technical_evaluation.md
+|   |   +-- 06_feedback_coaching.md
+|   +-- llm/                             # Multi-provider router
+|   |   +-- client.ts                    # generate / generateStream / embed / generateFromPdf
+|   |   +-- config.ts                    # per-agent (provider, model, sampling)
+|   |   +-- types.ts                     # ChatMessage, GenOptions, GenerateRequest, ...
+|   |   +-- providers/
+|   |       +-- groq.ts                  # Llama 3.3 70B
+|   |       +-- gemini.ts                # 2.0 Flash + embeddings + native PDF
+|   |       +-- ollama.ts                # offline OpenAI-compatible fallback
+|   +-- matching/
+|   |   +-- jd-match.ts                  # hybrid score: embedding + skill overlap + seniority
+|   |   +-- rank-all.ts                  # parallel-score every IPHIPI job
+|   +-- embeddings/
+|   |   +-- similarity.ts                # cosine sim, mean-pool, chunking
+|   +-- storage/
+|   |   +-- db.ts                        # libSQL DAL (auto-falls-back to local SQLite)
+|   |   +-- blob.ts                      # Vercel Blob (auto-falls-back to local FS)
+|   |   +-- types.ts                     # All entity TS shapes
+|   +-- auth/
+|   |   +-- candidate-token.ts           # HMAC-signed cookie sign / verify
+|   +-- voice/                           # BROWSER ONLY
+|   |   +-- audio-analyzer.ts            # Web Audio API: VAD + RMS + pitch + per-turn metrics
+|   |   +-- speech.ts                    # SpeechRecognition + SpeechSynthesis wrappers
+|   +-- vision/                          # BROWSER ONLY
+|   |   +-- mediapipe-loader.ts          # Lazy-load FaceLandmarker + PoseLandmarker
+|   |   +-- metrics-aggregator.ts        # Per-frame -> per-turn VisualMetrics + live snapshot
+|   +-- actions/
+|   |   +-- apply.ts                     # Server action: orchestrates the apply pipeline
+|   +-- utils.ts                         # cn() class merger, pct(), clamp() helpers
+|
++-- components/
+|   +-- ui/
+|   |   +-- button.tsx                   # variants: default | secondary | ghost | outline
+|   +-- iphipi/                          # Branded composites
+|       +-- nav.tsx
+|       +-- footer.tsx
+|       +-- apply-form.tsx
+|       +-- match-me-form.tsx
+|       +-- match-score-ring.tsx         # Animated SVG ring
+|       +-- start-interview-button.tsx
+|       +-- interview-workspace.tsx      # The live interview UI (~700 LOC)
+|
++-- db/
+|   +-- schema.sql                       # libSQL / Postgres-compatible schema
+|   +-- seed/
+|       +-- jobs.json                    # The 6 IPHIPI demo roles
+|
++-- scripts/                             # tsx-runnable utilities
+|   +-- setup.ts                         # npm run setup
+|   +-- check-env.ts                     # npm run check:env
+|   +-- check-samples.ts                 # npm run check:samples
+|
++-- samples/                             # regression fixtures + demo inputs
+|   +-- resumes/
+|   |   +-- senior-backend.txt
+|   +-- expected-outputs/
+|       +-- senior-backend__match.json
+|       +-- senior-backend__report.md
+|
++-- docs/                                # documentation
+|   +-- ARCHITECTURE.md                  # markdown counterpart of this document
+|   +-- ARCHITECTURE.tex                 # this document (Overleaf-ready LaTeX)
+|   +-- AGENTS.md                        # per-agent input/output reference
+|   +-- RUNBOOK.md                       # ops + demo-day playbook
+|   +-- INTERVIEW_QA.html                # ~90-question executive walkthrough
+|
++-- public/                              # static assets (none currently)
++-- README.md                            # entry-point: one-command quickstart
++-- package.json
++-- tsconfig.json
++-- next.config.mjs
++-- tailwind.config.ts
++-- postcss.config.mjs
++-- .env.example                         # documented; copy to .env.local
++-- .gitignore                           # excludes node_modules, .env*.local, data/
+\end{lstlisting}
+
+\subsection{Decoupling guarantees}
+
+The structure enforces three decoupling rules:
+
+\begin{enumerate}
+  \item \textbf{One agent, one file.} Each of the six agents in
+        \texttt{lib/agents/} is a pure function with a typed input and a
+        typed output. None of them know which provider (Groq, Gemini,
+        Ollama) actually serves the request --- they speak only to
+        \texttt{lib/llm/client.ts}.
+  \item \textbf{Prompts are data, not code.} System prompts live as
+        \texttt{.md} files in \texttt{lib/prompts/} and are loaded once
+        at runtime. Editing a prompt is a one-line text diff; no TypeScript
+        recompilation is needed for a behavioural change.
+  \item \textbf{Storage is swappable.} \texttt{lib/storage/db.ts} and
+        \texttt{lib/storage/blob.ts} present minimal interfaces
+        (\texttt{listJobs}, \texttt{uploadResume}, \ldots). Swapping
+        Turso for Postgres or Vercel Blob for Cloudflare R2 is a
+        single-file change.
+\end{enumerate}
+
+\subsection{Module map at a glance}
+
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}p{3.6cm} p{11.0cm}@{}}
+\toprule
+\textbf{Folder} & \textbf{Responsibility} \\
+\midrule
+\texttt{app/}              & Pages and API routes only. No domain logic. \\
+\texttt{lib/agents/}       & The six agents. One file each. \\
+\texttt{lib/prompts/}      & Versioned system prompts as \texttt{.md}. \\
+\texttt{lib/llm/}          & Multi-provider router and adapters. \\
+\texttt{lib/matching/}     & JD-match scoring (deterministic + LLM rationale). \\
+\texttt{lib/storage/}      & DAL + blob; both with local-FS fallbacks. \\
+\texttt{lib/voice/}        & Browser-side audio (VAD + metrics + STT/TTS). \\
+\texttt{lib/vision/}       & Browser-side MediaPipe pipeline. \\
+\texttt{components/}       & UI primitives + branded composites. \\
+\texttt{db/}               & SQL schema + seed data. \\
+\texttt{scripts/}          & Operational \texttt{tsx} scripts. \\
+\texttt{samples/}          & Regression fixtures and demo inputs. \\
+\texttt{docs/}             & Architecture, agents, runbook, walkthrough. \\
+\bottomrule
+\end{tabular}
+\caption{Directory responsibilities.}
+\end{table}
+
+%%------------------------------------------------------------------%%
 \vspace{1.5cm}
 \hrule
 \vspace{0.4cm}
