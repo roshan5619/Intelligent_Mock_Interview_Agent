@@ -246,20 +246,22 @@
 %%========================== User journey ==========================%%
 \begin{frame}{End-to-end user journey}
   \vspace{0.2cm}
+  %% `step` collides with TikZ's built-in `step=<value>` grid key, so we name
+  %% our local style `flowstep`. Same fix applied to the per-turn flow slide.
   \begin{tikzpicture}[
     node distance=2mm and 6mm,
-    step/.style={draw=brand!60, rounded corners=4pt, fill=brand!10,
-                 minimum width=2.3cm, minimum height=1.2cm,
-                 font=\sffamily\scriptsize\color{slidefg}, align=center,
-                 blur shadow={shadow blur steps=3}}
+    flowstep/.style={draw=brand!60, rounded corners=4pt, fill=brand!10,
+                     text=slidefg, minimum width=2.3cm, minimum height=1.2cm,
+                     font=\sffamily\scriptsize, align=center,
+                     blur shadow={shadow blur steps=3}}
     ]
-    \node[step] (s1) {Upload\\resume};
-    \node[step, right=of s1] (s2) {Agent 1\\ context profile};
-    \node[step, right=of s2] (s3) {JD-match\\ rank IPHIPI roles};
-    \node[step, right=of s3] (s4) {Apply\\ see fit score};
-    \node[step, right=of s4] (s5) {Mock\\ interview};
-    \node[step, right=of s5] (s6) {Live\\ multimodal scoring};
-    \node[step, right=of s6] (s7) {Coaching\\ report};
+    \node[flowstep] (s1) {Upload\\resume};
+    \node[flowstep, right=of s1] (s2) {Agent 1\\ context profile};
+    \node[flowstep, right=of s2] (s3) {JD-match\\ rank IPHIPI roles};
+    \node[flowstep, right=of s3] (s4) {Apply\\ see fit score};
+    \node[flowstep, right=of s4] (s5) {Mock\\ interview};
+    \node[flowstep, right=of s5] (s6) {Live\\ multimodal scoring};
+    \node[flowstep, right=of s6] (s7) {Coaching\\ report};
 
     \draw[flow] (s1)--(s2); \draw[flow] (s2)--(s3); \draw[flow] (s3)--(s4);
     \draw[flow] (s4)--(s5); \draw[flow] (s5)--(s6); \draw[flow] (s6)--(s7);
@@ -605,25 +607,25 @@
   \footnotesize
   \begin{tikzpicture}[
     node distance=2.5mm and 8mm, scale=0.9, transform shape,
-    step/.style={draw=brandLite!40, rounded corners=3pt, fill=slidebg!85!white!4,
-                 font=\sffamily\scriptsize\color{slidefg},
-                 minimum width=3.0cm, minimum height=0.7cm, align=center},
+    flowstep/.style={draw=brandLite!40, rounded corners=3pt, fill=blockbg,
+                     text=slidefg, font=\sffamily\scriptsize,
+                     minimum width=3.0cm, minimum height=0.7cm, align=center},
     para/.style={draw=brand!60, fill=brand!15, rounded corners=3pt,
-                 font=\sffamily\scriptsize\bfseries\color{white},
+                 text=white, font=\sffamily\scriptsize\bfseries,
                  minimum width=2.8cm, minimum height=0.7cm, align=center}
     ]
-    \node[step] (s1) {Browser flushes metrics};
-    \node[step, below=of s1] (s2) {POST \texttt{/api/interview/turn}};
-    \node[step, below=of s2] (s3) {Persist candidate turn};
+    \node[flowstep] (s1) {Browser flushes metrics};
+    \node[flowstep, below=of s1] (s2) {POST \texttt{/api/interview/turn}};
+    \node[flowstep, below=of s2] (s3) {Persist candidate turn};
 
     \node[para, right=18mm of s3] (a3) {Agent 3 (audio LLM)};
     \node[para, below=1mm of a3] (a4) {Agent 4 (CV math)};
     \node[para, below=1mm of a4] (a5) {Agent 5 (tech LLM)};
 
-    \node[step, below=8mm of s3] (s4) {Persist all evaluations};
-    \node[step, below=of s4] (s5) {Build 2-turn trends};
-    \node[step, below=of s5] (s6) {Agent 2 decides next turn\\\emph{heuristics may override}};
-    \node[step, below=of s6] (s7) {Return JSON $+$ TTS};
+    \node[flowstep, below=8mm of s3] (s4) {Persist all evaluations};
+    \node[flowstep, below=of s4] (s5) {Build 2-turn trends};
+    \node[flowstep, below=of s5] (s6) {Agent 2 decides next turn\\\emph{heuristics may override}};
+    \node[flowstep, below=of s6] (s7) {Return JSON $+$ TTS};
 
     \draw[flow] (s1)--(s2); \draw[flow] (s2)--(s3);
     \draw[flow] (s3.east) -| ([xshift=-3mm]a3.west) -- (a3.west);
