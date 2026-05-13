@@ -34,6 +34,8 @@
 \definecolor{warn}{HTML}{B5621A}
 \definecolor{slidebg}{HTML}{080A14}
 \definecolor{slidefg}{HTML}{E7EAF3}
+\definecolor{blockbg}{HTML}{121627}     % subtle lift over slidebg (used for blocks + boxes)
+\definecolor{codebgDark}{HTML}{0F1322}   % code-block background
 
 %%-------- Beamer theme tweaks --------%%
 \usetheme{default}
@@ -48,7 +50,7 @@
 \setbeamercolor{structure}{fg=brand}
 \setbeamercolor{item}{fg=brand}
 \setbeamercolor{block title}{fg=white, bg=brand}
-\setbeamercolor{block body}{bg=slidebg!85!white!4, fg=slidefg}
+\setbeamercolor{block body}{bg=blockbg, fg=slidefg}
 \setbeamercolor{alerted text}{fg=brandLite}
 
 \setbeamerfont{frametitle}{size=\Large,series=\bfseries}
@@ -89,7 +91,7 @@
   morestring=[b]"
 }
 \lstset{
-  backgroundcolor=\color{slidebg!90!white},
+  backgroundcolor=\color{codebgDark},
   basicstyle=\ttfamily\scriptsize\color{slidefg},
   frame=single,
   framerule=0pt,
@@ -105,18 +107,22 @@
 }
 
 %%-------- TikZ helpers --------%%
+%% Note: TikZ's `font=` key takes font commands only. Colour goes via `text=`.
 \tikzset{
-  block/.style={draw=brand!60, rounded corners=4pt, fill=brand!12, minimum width=3.0cm,
-                minimum height=0.9cm, font=\sffamily\footnotesize\color{slidefg}, align=center,
+  block/.style={draw=brand!60, rounded corners=4pt, fill=brand!12, text=slidefg,
+                minimum width=3.0cm, minimum height=0.9cm,
+                font=\sffamily\footnotesize, align=center,
                 blur shadow={shadow blur steps=4}},
-  store/.style={draw=accent!60, rounded corners=2pt, fill=accent!12, minimum width=2.6cm,
-                minimum height=0.8cm, font=\sffamily\scriptsize\color{slidefg}, align=center},
-  ext/.style={draw=ok!60, rounded corners=4pt, fill=ok!15, minimum width=2.7cm,
-              minimum height=0.8cm, font=\sffamily\scriptsize\color{slidefg}, align=center},
+  store/.style={draw=accent!60, rounded corners=2pt, fill=accent!12, text=slidefg,
+                minimum width=2.6cm, minimum height=0.8cm,
+                font=\sffamily\scriptsize, align=center},
+  ext/.style={draw=ok!60, rounded corners=4pt, fill=ok!15, text=slidefg,
+              minimum width=2.7cm, minimum height=0.8cm,
+              font=\sffamily\scriptsize, align=center},
   flow/.style={->,>={Stealth[length=2.2mm]}, semithick, draw=brandLite},
   sect/.style={draw=brandLite!30, dashed, rounded corners=6pt, inner sep=6pt},
-  badge/.style={fill=brand, rounded corners=4pt, inner sep=4pt,
-                font=\sffamily\bfseries\color{white}}
+  badge/.style={fill=brand, rounded corners=4pt, inner sep=4pt, text=white,
+                font=\sffamily\bfseries}
 }
 
 %%-------- a couple of slide helpers --------%%
@@ -125,13 +131,12 @@
   \begin{tikzpicture}
     \node[draw=brand!60, fill=brand!10, rounded corners=8pt, minimum width=3.6cm, minimum height=1.6cm,
           align=center, font=\sffamily] {%
-      \color{white}\bfseries\Large #1\\[2pt]
+      \color{white}\bfseries\Large #1 \par
       \color{slidefg!75}\scriptsize #2%
     };
   \end{tikzpicture}}
 
-\title{IPHIPI}
-\subtitle{Agentic AI Mock Interview Platform}
+\title{IPHIPI -- Agentic AI Mock Interview Platform}
 \author{Technical Presentation}
 \date{}
 
@@ -178,8 +183,8 @@
     \column{0.32\textwidth}
       \begin{tikzpicture}
         \node[draw=brand!60,fill=brand!10,rounded corners=8pt,inner sep=10pt,
-              text width=4.5cm,font=\sffamily\footnotesize\color{slidefg}]{
-          \biglabel{Static} \\[4pt]
+              text width=4.5cm,align=left,text=slidefg,font=\sffamily\footnotesize]{
+          \biglabel{Static} \par\vspace{4pt}
           Question banks don't adapt to the candidate's resume, seniority,
           or live performance.
         };
@@ -187,8 +192,8 @@
     \column{0.32\textwidth}
       \begin{tikzpicture}
         \node[draw=brand!60,fill=brand!10,rounded corners=8pt,inner sep=10pt,
-              text width=4.5cm,font=\sffamily\footnotesize\color{slidefg}]{
-          \biglabel{Text-only} \\[4pt]
+              text width=4.5cm,align=left,text=slidefg,font=\sffamily\footnotesize]{
+          \biglabel{Text-only} \par\vspace{4pt}
           Generic LLM chats can't read body language or vocal cues ---
           signals that matter for senior roles.
         };
@@ -196,8 +201,8 @@
     \column{0.32\textwidth}
       \begin{tikzpicture}
         \node[draw=brand!60,fill=brand!10,rounded corners=8pt,inner sep=10pt,
-              text width=4.5cm,font=\sffamily\footnotesize\color{slidefg}]{
-          \biglabel{Opaque} \\[4pt]
+              text width=4.5cm,align=left,text=slidefg,font=\sffamily\footnotesize]{
+          \biglabel{Opaque} \par\vspace{4pt}
           Most tools surface a score with no evidence and no path to
           improvement.
         };
